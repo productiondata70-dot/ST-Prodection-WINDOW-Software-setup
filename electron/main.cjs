@@ -19,7 +19,7 @@ const cleanUserAgent = defaultUserAgent
 app.userAgentFallback = cleanUserAgent;
 
 // Authoritative version from package.json
-let AUTHORITATIVE_VERSION = '1.0.1';
+let AUTHORITATIVE_VERSION = '1.0.2';
 try {
   if (app.getVersion() && app.getVersion() !== '0.0.0') {
     AUTHORITATIVE_VERSION = app.getVersion();
@@ -44,8 +44,8 @@ try {
   console.warn('Could not read package.json version:', err);
 }
 
-const DEFAULT_GITHUB_OWNER = 'tanzeelapp';
-const DEFAULT_GITHUB_REPO = 'finl-pc-st-prodection';
+const DEFAULT_GITHUB_OWNER = 'productiondata70-dot';
+const DEFAULT_GITHUB_REPO = 'ST-Prodection-WINDOW-Software-setup';
 
 let mainWindow = null;
 let lastDownloadedInstallerPath = null;

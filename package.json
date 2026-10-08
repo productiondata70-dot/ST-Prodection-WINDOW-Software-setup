@@ -1,7 +1,7 @@
 {
   "name": "st-production-and-stock-manager",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "ST Production & Stock Manager - Windows Desktop & Web Application",
   "main": "electron/main.cjs",
   "author": "ST Production",

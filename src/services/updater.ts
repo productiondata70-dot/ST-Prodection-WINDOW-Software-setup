@@ -70,8 +70,8 @@ export const APP_VERSION: string = (() => {
   return normalizeVersion(pkg.version || '1.0.0');
 })();
 
-export const DEFAULT_GITHUB_OWNER = 'tanzeelapp';
-export const DEFAULT_GITHUB_REPO = 'finl-pc-st-prodection';
+export const DEFAULT_GITHUB_OWNER = 'productiondata70-dot';
+export const DEFAULT_GITHUB_REPO = 'ST-Prodection-WINDOW-Software-setup';
 const REPO_STORAGE_KEY = 'st_update_github_repo_config';
 const LAST_CHECK_STORAGE_KEY = 'st_update_last_checked_at';
 
@@ -239,12 +239,20 @@ export class UpdaterService {
         const raw = localStorage.getItem(REPO_STORAGE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (parsed && parsed.owner && parsed.repo) {
+          if (
+            parsed &&
+            parsed.owner &&
+            parsed.repo &&
+            parsed.owner !== 'tanzeelapp' &&
+            parsed.repo !== 'finl-pc-st-prodection'
+          ) {
             return {
               owner: String(parsed.owner).trim(),
               repo: String(parsed.repo).trim(),
             };
           }
+          // Remove outdated legacy repo key
+          localStorage.removeItem(REPO_STORAGE_KEY);
         }
       }
     } catch {}

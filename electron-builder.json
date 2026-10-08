@@ -17,8 +17,8 @@
   "publish": [
     {
       "provider": "github",
-      "owner": "tanzeelapp",
-      "repo": "finl-pc-st-prodection",
+      "owner": "productiondata70-dot",
+      "repo": "ST-Prodection-WINDOW-Software-setup",
       "releaseType": "release"
     }
   ],

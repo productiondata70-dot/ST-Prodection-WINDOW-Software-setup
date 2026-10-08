@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-let appVersion = '1.0.1';
+let appVersion = '1.0.2';
 try {
   const possiblePaths = [
     path.join(__dirname, '../package.json'),
