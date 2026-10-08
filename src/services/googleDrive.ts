@@ -141,6 +141,14 @@ export async function connectRealGoogleAccount(): Promise<{
 }> {
   try {
     isSigningIn = true;
+
+    // Guard against running directly under file:// protocol
+    if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+      throw new Error(
+        'Google Sign-In cannot use local file:// paths due to browser security restrictions. Please launch the software using the desktop executable or run "npm run electron:dev" to use localhost.'
+      );
+    }
+
     const result = await signInWithPopup(auth, googleDriveProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
 

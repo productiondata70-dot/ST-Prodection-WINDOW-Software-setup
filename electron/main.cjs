@@ -1,21 +1,47 @@
 // @ts-check
-const { app, BrowserWindow, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const http = require('http');
 const { spawn } = require('child_process');
 
+// Sanitize User-Agent to comply with Google OAuth 2.0 policy and prevent 403 disallowed_useragent
+const defaultUserAgent =
+  app.userAgentFallback ||
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
+const cleanUserAgent = defaultUserAgent
+  .replace(/Electron\/[0-9\.]+\s?/gi, '')
+  .replace(/ST[ -]?Production[ -]?and[ -]?Stock[ -]?Manager\/[0-9\.]+\s?/gi, '')
+  .trim();
+
+app.userAgentFallback = cleanUserAgent;
+
 // Authoritative version from package.json
-const pkgPath = path.join(__dirname, '../package.json');
-let AUTHORITATIVE_VERSION = '1.0.0';
+let AUTHORITATIVE_VERSION = '1.0.1';
 try {
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-  if (pkg && pkg.version) {
-    AUTHORITATIVE_VERSION = String(pkg.version).trim();
+  if (app.getVersion() && app.getVersion() !== '0.0.0') {
+    AUTHORITATIVE_VERSION = app.getVersion();
+  }
+} catch {}
+try {
+  const possiblePkgPaths = [
+    path.join(__dirname, '../package.json'),
+    path.join(__dirname, 'package.json'),
+    path.join(process.cwd(), 'package.json'),
+  ];
+  for (const p of possiblePkgPaths) {
+    if (fs.existsSync(p)) {
+      const pkg = JSON.parse(fs.readFileSync(p, 'utf-8'));
+      if (pkg && pkg.version) {
+        AUTHORITATIVE_VERSION = String(pkg.version).trim();
+        break;
+      }
+    }
   }
 } catch (err) {
-  console.warn('Could not read package.json version, falling back to app.getVersion():', err);
-  AUTHORITATIVE_VERSION = app.getVersion() || '1.0.0';
+  console.warn('Could not read package.json version:', err);
 }
 
 const DEFAULT_GITHUB_OWNER = 'tanzeelapp';
@@ -33,6 +59,8 @@ try {
   if (autoUpdater) {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.allowPrerelease = false;
+    autoUpdater.allowDowngrade = false;
   }
 } catch {
   // Fallback to built-in GitHub Release HTTPS updater
@@ -203,6 +231,7 @@ function downloadFileWithProgress(url, destPath, onProgress) {
           const fileStream = fs.createWriteStream(tempDestPath);
 
           res.on('data', chunk => {
+            req.setTimeout(120000);
             transferredBytes += chunk.length;
             const elapsedSec = Math.max((Date.now() - startTime) / 1000, 0.1);
             const bytesPerSecond = Math.round(transferredBytes / elapsedSec);
@@ -266,7 +295,100 @@ function downloadFileWithProgress(url, destPath, onProgress) {
   });
 }
 
-function createWindow() {
+let localServerInstance = null;
+let localServerUrl = null;
+
+/**
+ * Start an internal HTTP static file server for the production dist folder.
+ * This guarantees a clean 'http://localhost:<port>' web origin so that Firebase Auth
+ * and Google OAuth popups work seamlessly via postMessage without invalid file:// redirects.
+ * @param {string} distDir
+ * @returns {Promise<string | null>}
+ */
+function startLocalServer(distDir) {
+  return new Promise(resolve => {
+    const mimeTypes = {
+      '.html': 'text/html; charset=utf-8',
+      '.js': 'text/javascript; charset=utf-8',
+      '.mjs': 'text/javascript; charset=utf-8',
+      '.css': 'text/css; charset=utf-8',
+      '.json': 'application/json; charset=utf-8',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.svg': 'image/svg+xml',
+      '.ico': 'image/x-icon',
+      '.webp': 'image/webp',
+      '.woff': 'font/woff',
+      '.woff2': 'font/woff2',
+      '.ttf': 'font/ttf',
+    };
+
+    const server = http.createServer((req, res) => {
+      try {
+        let reqPath = decodeURI((req.url || '/').split('?')[0]);
+        if (reqPath === '/' || !reqPath) {
+          reqPath = '/index.html';
+        }
+
+        let filePath = path.join(distDir, reqPath);
+        // Path traversal defense
+        if (!filePath.startsWith(distDir)) {
+          res.writeHead(403);
+          res.end('Forbidden');
+          return;
+        }
+
+        // SPA fallback to index.html if file doesn't exist
+        if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+          filePath = path.join(distDir, 'index.html');
+        }
+
+        if (!fs.existsSync(filePath)) {
+          res.writeHead(404);
+          res.end('Not Found');
+          return;
+        }
+
+        const ext = path.extname(filePath).toLowerCase();
+        const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+        fs.readFile(filePath, (err, data) => {
+          if (err) {
+            res.writeHead(500);
+            res.end('Server Error');
+            return;
+          }
+          res.writeHead(200, {
+            'Content-Type': contentType,
+            'Access-Control-Allow-Origin': '*',
+          });
+          res.end(data);
+        });
+      } catch (err) {
+        res.writeHead(500);
+        res.end('Internal Server Error');
+      }
+    });
+
+    // Listen on 127.0.0.1 on an available port assigned by OS
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      const port = addr && typeof addr === 'object' ? addr.port : 0;
+      localServerInstance = server;
+      localServerUrl = `http://localhost:${port}`;
+      console.log(`Local production server running at ${localServerUrl}`);
+      resolve(localServerUrl);
+    });
+
+    server.on('error', err => {
+      console.warn('Failed to start local static server, falling back to file:// loading:', err);
+      resolve(null);
+    });
+  });
+}
+
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1366,
     height: 850,
@@ -290,9 +412,41 @@ function createWindow() {
     }
   });
 
-  // Handle external link clicks (open in default system web browser)
+  // Configure window open handler for popups vs external links
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // If it's a Google OAuth flow or external doc, open safely
+    // 1. Allow Google Auth & Firebase Auth popup windows to open as native child popup windows
+    const isAuthUrl =
+      url.includes('accounts.google.com') ||
+      url.includes('firebaseapp.com') ||
+      url.includes('googleapis.com') ||
+      url.includes('google.com') ||
+      url.startsWith('https://window-softwear-crm') ||
+      url === 'about:blank' ||
+      url === '';
+
+    if (isAuthUrl) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 520,
+          height: 680,
+          minWidth: 420,
+          minHeight: 550,
+          autoHideMenuBar: true,
+          modal: false,
+          parent: mainWindow,
+          show: true,
+          title: 'Sign in with Google - ST Production & Stock Manager',
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: true,
+          },
+        },
+      };
+    }
+
+    // 2. Standard external documentation or links open in system default browser
     if (url.startsWith('https:') || url.startsWith('http:')) {
       shell.openExternal(url);
       return { action: 'deny' };
@@ -305,11 +459,22 @@ function createWindow() {
   if (devUrl) {
     mainWindow.loadURL(devUrl);
   } else {
-    // In production build, load the bundled Vite dist index.html
-    const indexPath = path.join(__dirname, '../dist/index.html');
-    mainWindow.loadFile(indexPath).catch(err => {
-      console.error('Failed to load local HTML bundle:', err);
-    });
+    // In production build, serve bundled Vite dist via local server on localhost
+    const distDir = path.join(__dirname, '../dist');
+    if (!localServerUrl) {
+      await startLocalServer(distDir);
+    }
+
+    if (localServerUrl) {
+      mainWindow.loadURL(localServerUrl).catch(err => {
+        console.warn('Failed to load local server URL, falling back to loadFile:', err);
+        mainWindow.loadFile(path.join(distDir, 'index.html'));
+      });
+    } else {
+      mainWindow.loadFile(path.join(distDir, 'index.html')).catch(err => {
+        console.error('Failed to load local HTML bundle:', err);
+      });
+    }
   }
 
   mainWindow.on('closed', () => {
@@ -737,8 +902,51 @@ ipcMain.handle('printer:print-html', async (_event, payload = {}) => {
   }
 });
 
-app.whenReady().then(() => {
-  createWindow();
+app.whenReady().then(async () => {
+  // Apply clean user agent to session and strip Electron header from auth requests
+  if (session && session.defaultSession) {
+    session.defaultSession.setUserAgent(cleanUserAgent);
+
+    session.defaultSession.webRequest.onBeforeSendHeaders(
+      {
+        urls: [
+          'https://accounts.google.com/*',
+          'https://*.firebaseapp.com/*',
+          'https://*.googleapis.com/*',
+        ],
+      },
+      (details, callback) => {
+        details.requestHeaders['User-Agent'] = cleanUserAgent;
+        callback({ requestHeaders: details.requestHeaders });
+      }
+    );
+  }
+
+  // Handle all popup windows created by webContents
+  app.on('web-contents-created', (_event, contents) => {
+    contents.setUserAgent(cleanUserAgent);
+    contents.setWindowOpenHandler(({ url }) => {
+      const isAuthUrl =
+        url.includes('accounts.google.com') ||
+        url.includes('firebaseapp.com') ||
+        url.includes('googleapis.com') ||
+        url.includes('google.com') ||
+        url.startsWith('https://window-softwear-crm') ||
+        url === 'about:blank' ||
+        url === '';
+
+      if (isAuthUrl) {
+        return { action: 'allow' };
+      }
+      if (url.startsWith('https:') || url.startsWith('http:')) {
+        shell.openExternal(url);
+        return { action: 'deny' };
+      }
+      return { action: 'allow' };
+    });
+  });
+
+  await createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -750,5 +958,14 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+app.on('will-quit', () => {
+  if (localServerInstance) {
+    try {
+      localServerInstance.close();
+    } catch {}
+    localServerInstance = null;
   }
 });

@@ -3,11 +3,21 @@ const { contextBridge, ipcRenderer } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-let appVersion = '1.0.0';
+let appVersion = '1.0.1';
 try {
-  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf-8'));
-  if (pkg && pkg.version) {
-    appVersion = String(pkg.version).trim();
+  const possiblePaths = [
+    path.join(__dirname, '../package.json'),
+    path.join(__dirname, 'package.json'),
+    path.join(process.cwd(), 'package.json'),
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      const pkg = JSON.parse(fs.readFileSync(p, 'utf-8'));
+      if (pkg && pkg.version) {
+        appVersion = String(pkg.version).trim();
+        break;
+      }
+    }
   }
 } catch {}
 

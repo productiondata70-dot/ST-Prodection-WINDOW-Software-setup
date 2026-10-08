@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, browserLocalPersistence, setPersistence } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, setDoc } from 'firebase/firestore';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
@@ -11,6 +11,14 @@ export const firebaseConfig = {
 // Initialize Firebase App, Auth, and Firestore
 export const firebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(firebaseApp);
+
+// Configure local persistence for secure session preservation across desktop launches
+if (typeof window !== 'undefined') {
+  setPersistence(auth, browserLocalPersistence).catch(err => {
+    console.warn('Firebase auth persistence configuration notice:', err?.message || err);
+  });
+}
+
 export const firestore = getFirestore(firebaseApp);
 
 /**
