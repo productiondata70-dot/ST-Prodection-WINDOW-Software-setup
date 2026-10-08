@@ -1,0 +1,67 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Windows EXE (Installer & Portable)",
+      "type": "shell",
+      "command": "npm run package:win",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "detail": "Compiles the web application and packages Windows Setup and Portable .exe binaries to release/ folder"
+    },
+    {
+      "label": "Build Portable EXE Only (.exe)",
+      "type": "shell",
+      "command": "npm run package:win:portable",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "detail": "Packages single-file standalone Portable .exe to release/ folder"
+    },
+    {
+      "label": "Build Installer EXE Only (.exe)",
+      "type": "shell",
+      "command": "npm run package:win:nsis",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "detail": "Packages Windows NSIS Setup .exe to release/ folder"
+    },
+    {
+      "label": "Run Windows Desktop (Dev)",
+      "type": "shell",
+      "command": "npm run electron:dev",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "detail": "Runs local dev build and launches Electron desktop window"
+    },
+    {
+      "label": "Start Web Dev Server",
+      "type": "shell",
+      "command": "npm run dev",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "detail": "Starts Vite development server on port 3000"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+node_modules
+dist
+release
+*.exe
+dist-electron
+.env
+.env.local
+.DS_Store
+.windsurf
+

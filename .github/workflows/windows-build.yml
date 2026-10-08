@@ -1,0 +1,66 @@
+name: Build Windows Desktop Software
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Read authoritative version from package.json
+        id: pkg
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build web application bundle
+        run: npm run build
+
+      - name: Package Windows executable (.exe) and update metadata
+        run: npm run package:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows setup artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ST-Production-and-Stock-Manager-Windows-v${{ steps.pkg.outputs.version }}
+          path: |
+            release/*.exe
+            release/*.yml
+            release/*.blockmap
+          retention-days: 14
+
+      - name: Publish GitHub Release with Windows Installer & Auto-Update Metadata
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || steps.pkg.outputs.tag }}
+          name: ST Production and Stock Manager ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || steps.pkg.outputs.tag }}
+          files: |
+            release/*.exe
+            release/*.yml
+            release/*.blockmap
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

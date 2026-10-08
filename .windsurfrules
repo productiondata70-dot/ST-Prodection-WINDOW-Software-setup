@@ -1,0 +1,78 @@
+# Windsurf Rules & Project Guide — ST Production and Stock Manager
+
+## Project Overview
+This repository contains **ST Production and Stock Manager**, an enterprise Windows desktop software and web application for flour mills, factories, and commercial shops.
+
+- **Frontend:** React 19, TypeScript, Tailwind CSS, Lucide React, jsPDF
+- **Desktop Runtime:** Electron (`electron/main.cjs` and `electron/preload.cjs`)
+- **Packaging System:** electron-builder configured via `electron-builder.json`
+- **Output Artifacts:** Windows NSIS Setup Installer (`.exe`) and Portable standalone (`.exe`)
+
+---
+
+## Instructions for Windsurf AI / Cascade
+
+When the user asks to build or generate the Windows `.exe` file:
+
+### 1. Prerequisites Check
+Verify that Node.js is installed in the Windows environment:
+```powershell
+node -v
+npm -v
+```
+If Node.js is not installed, prompt the user to install Node.js 18 or 20 LTS from https://nodejs.org.
+
+### 2. Dependency Installation
+Run in the terminal:
+```powershell
+npm install
+```
+
+### 3. Build & Package Commands
+To build the `.exe` files, run:
+```powershell
+npm run package:win
+```
+Or simply run the included batch script:
+```powershell
+.\build-windows.bat
+```
+
+### 4. Locate the Generated Executable
+Once the build completes, the `.exe` files are in the `release/` directory:
+- **Installer (NSIS):** `release\ST Production and Stock Manager-Setup-1.0.0.exe`
+- **Portable (Standalone):** `release\ST Production and Stock Manager-Portable-1.0.0.exe`
+
+### 5. Specialized Build Commands
+If the user only wants the portable .exe or installer:
+```powershell
+# Both installer & portable:
+npm run package:win
+# or
+npm run build:exe
+
+# Portable .exe only (quickest, single file):
+npm run package:win:portable
+
+# NSIS Setup Installer only:
+npm run package:win:nsis
+```
+
+### 6. Running in Development Mode Inside Windsurf
+To run the desktop app locally for testing:
+```powershell
+npm run electron:dev
+```
+Or to run only the browser web version:
+```powershell
+npm run dev
+```
+
+---
+
+## Important Rules for Cascade
+- When the user asks to build or get the `.exe` file, execute `npm run package:win` in the terminal directly.
+- The build script runs `vite build` first (creating `dist/`), then invokes `electron-builder` which bundles everything into the Windows binaries in `release/`.
+- Never remove or overwrite `electron/main.cjs`, `electron/preload.cjs`, or `electron-builder.json`.
+- Do not commit secrets, private API keys, or service account credentials.
+- All production build outputs belong in `release/` and are ignored by git.

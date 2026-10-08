@@ -1,0 +1,6 @@
+{
+  "name": "ST Production and Stock Manager",
+  "description": "Complete Windows Desktop Software for Flour Mills, Factories, and Shops. Manages Production, Bags & Weight Calculations, Stock Ledger, Sales, Returns, Waste, and PDF Reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
