@@ -544,6 +544,12 @@ export type ModuleKey =
 export type AppTheme =
   | 'ios-light'
   | 'ios-colorful'
+  | 'vivid-pro'
+  | 'deskera-plum'
+  | 'deskera-navy'
+  | 'deskera-emerald'
+  | 'deskera-crimson'
+  | 'deskera-slate'
   | 'midnight-dark'
   | 'emerald-dark'
   | 'cobalt-blue'
@@ -560,8 +566,12 @@ export interface AppSettings {
   allowNegativeInventory: boolean;
   saleInvoicePriceMode?: 'unlocked' | 'locked';
   allowSignUp?: boolean;
+  allowOpenSignUp?: boolean;
   hideSignUpWhenDisabled?: boolean;
   allowedSignUpBusinessModes?: string[];
+  backendAuthorizedEmails?: string[];
+  offlineSyncQueue?: any[];
+  lastOfflineSyncAt?: string;
   adminPin?: string;
   profileEditPasswordHash?: string;
   profileEditPinHash?: string;

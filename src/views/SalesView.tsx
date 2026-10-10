@@ -63,6 +63,11 @@ export const SalesView: React.FC<SalesViewProps> = ({
   const modeConfig = getBusinessModeConfig(db.profile?.businessType);
   const [barcodeScanInput, setBarcodeScanInput] = useState('');
   const [cashTendered, setCashTendered] = useState('');
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [selectedSearchCategory, setSelectedSearchCategory] = useState<string>('all');
+  const [selectedSearchQty, setSelectedSearchQty] = useState<Record<string, number>>({});
+  const [selectedSearchBagSize, setSelectedSearchBagSize] = useState<Record<string, number>>({});
+  const [isProductCatalogBrowserOpen, setIsProductCatalogBrowserOpen] = useState(true);
 
   const [isNewSaleOpen, setIsNewSaleOpen] = useState(false);
   const [selectedSaleDetail, setSelectedSaleDetail] = useState<SaleRecord | null>(null);
@@ -289,6 +294,74 @@ export const SalesView: React.FC<SalesViewProps> = ({
     playScannerBeep();
     setBarcodeScanInput('');
   };
+
+  const handleAddProductFromSearch = (prod: any, bagSizeKg?: number, qty: number = 1) => {
+    const size = bagSizeKg || selectedSearchBagSize[prod.id] || prod.bagSizes?.[0] || (mode === 'factory' ? 50 : 1);
+    const balance = storage.getStockBalance(prod.id, size);
+    const available = balance ? balance.availableBags : 0;
+    const isService = prod.itemType === 'service';
+
+    const existingLine = saleLines.find(
+      l => l.productId === prod.id && l.bagSizeKg === size
+    );
+    const nextQty = (existingLine ? existingLine.bags : 0) + qty;
+
+    if (!isService && !db.settings.allowNegativeInventory && available < nextQty) {
+      setNotificationMsg({
+        type: 'error',
+        text: `Insufficient quantity for "${prod.nameEn}". Available: ${available} ${prod.unit || 'units'}.`,
+      });
+      return;
+    }
+
+    const autoRate = getApplicableRate(prod.id, size);
+    setSaleLines(prev => {
+      const existingIdx = prev.findIndex(
+        l => l.productId === prod.id && l.bagSizeKg === size
+      );
+      if (existingIdx !== -1) {
+        const copy = [...prev];
+        copy[existingIdx] = {
+          ...copy[existingIdx],
+          bags: copy[existingIdx].bags + qty,
+        };
+        return copy;
+      }
+      return [
+        ...prev,
+        {
+          productId: prod.id,
+          bagSizeKg: size,
+          bags: qty,
+          unitPrice: autoRate,
+          unitPriceInput: String(autoRate),
+        },
+      ];
+    });
+
+    playScannerBeep();
+    setNotificationMsg({
+      type: 'success',
+      text: `Added "${prod.nameEn}" (${qty} × ${size}${mode === 'factory' ? 'kg' : ' ' + (prod.unit || 'unit')}) to invoice.`,
+    });
+  };
+
+  const matchedDispatchProducts = db.products.filter(p => {
+    if (!p.isActive) return false;
+    if (selectedSearchCategory !== 'all' && p.category !== selectedSearchCategory) {
+      return false;
+    }
+    if (!productSearchQuery.trim()) return isProductCatalogBrowserOpen;
+    const q = productSearchQuery.trim().toLowerCase();
+    return (
+      p.nameEn.toLowerCase().includes(q) ||
+      (p.nameUr && p.nameUr.toLowerCase().includes(q)) ||
+      (p.sku && p.sku.toLowerCase().includes(q)) ||
+      (p.barcode && p.barcode.toLowerCase().includes(q)) ||
+      (p.category && p.category.toLowerCase().includes(q)) ||
+      (p.type && p.type.toLowerCase().includes(q))
+    );
+  });
 
   const handleRemoveLine = (idx: number) => {
     setSaleLines(saleLines.filter((_, i) => i !== idx));
@@ -1044,33 +1117,31 @@ export const SalesView: React.FC<SalesViewProps> = ({
             </div>
 
             <div className="p-6 overflow-y-auto space-y-4 flex-1">
-              {/* POS Barcode / SKU Quick Scanner Bar for Shopping Mart & Small Business Mode */}
-              {mode !== 'factory' && (
-                <div className="p-3 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex flex-col sm:flex-row items-center gap-2">
-                  <div className="flex-1 w-full">
-                    <input
-                      type="text"
-                      value={barcodeScanInput}
-                      onChange={e => setBarcodeScanInput(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleBarcodeScanAdd(barcodeScanInput);
-                        }
-                      }}
-                      placeholder="Scan Barcode or enter SKU / Product Name and press Enter to add to cart..."
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 font-mono outline-none"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleBarcodeScanAdd(barcodeScanInput)}
-                    className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 shrink-0"
-                  >
-                    + Scan / Add Item
-                  </button>
+              {/* POS Barcode / SKU Quick Scanner Bar across all modes */}
+              <div className="p-3 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex flex-col sm:flex-row items-center gap-2">
+                <div className="flex-1 w-full">
+                  <input
+                    type="text"
+                    value={barcodeScanInput}
+                    onChange={e => setBarcodeScanInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleBarcodeScanAdd(barcodeScanInput);
+                      }
+                    }}
+                    placeholder="Scan Barcode or enter SKU / Product Code and press Enter to add..."
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 font-mono outline-none"
+                  />
                 </div>
-              )}
+                <button
+                  type="button"
+                  onClick={() => handleBarcodeScanAdd(barcodeScanInput)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 shrink-0 cursor-pointer"
+                >
+                  + Scan / Quick Add
+                </button>
+              </div>
 
               {/* Customer and Sale Header Info */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1130,11 +1201,11 @@ export const SalesView: React.FC<SalesViewProps> = ({
               </div>
 
               {/* Line Items */}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                      Product Dispatch Items
+                      Product Dispatch Items (پروڈکٹ ڈسپیچ آئیٹمز)
                     </label>
                     <span
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
@@ -1146,24 +1217,245 @@ export const SalesView: React.FC<SalesViewProps> = ({
                       {isPriceLocked ? (
                         <>
                           <Lock className="w-3 h-3 text-amber-600" />
-                          <span>🔒 Price Locked (Read-Only Rate)</span>
+                          <span>🔒 Price Locked</span>
                         </>
                       ) : (
                         <>
                           <Unlock className="w-3 h-3 text-emerald-600" />
-                          <span>🔓 Price Unlocked (Manual Rate Editable)</span>
+                          <span>🔓 Price Unlocked</span>
                         </>
                       )}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleAddLine}
-                    className="flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Add Product Line</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProductCatalogBrowserOpen(!isProductCatalogBrowserOpen);
+                        if (!isProductCatalogBrowserOpen && !productSearchQuery) {
+                          setProductSearchQuery(' ');
+                        } else if (isProductCatalogBrowserOpen && productSearchQuery === ' ') {
+                          setProductSearchQuery('');
+                        }
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 cursor-pointer"
+                    >
+                      <Search className="w-3.5 h-3.5" />
+                      <span>{isProductCatalogBrowserOpen ? 'Close Product Search' : 'Search / Research Products'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddLine}
+                      className="flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Add Row</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Manual Product Research & Fast Dispatch Selector */}
+                <div className="p-3.5 bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-purple-50/80 dark:from-slate-800/80 dark:via-indigo-950/40 dark:to-slate-800/80 rounded-2xl border border-indigo-200 dark:border-indigo-800/80 space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Search className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">
+                        Research & Search Products (پروڈکٹ دستی تلاش کریں اور انوائس بنائیں)
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Type product name, Urdu name, SKU, or click category to research
+                    </span>
+                  </div>
+
+                  {/* Search Input & Category Filter Chips */}
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={productSearchQuery.trim() === '' && isProductCatalogBrowserOpen ? '' : productSearchQuery}
+                        onChange={e => {
+                          setProductSearchQuery(e.target.value);
+                          if (e.target.value.trim()) setIsProductCatalogBrowserOpen(true);
+                        }}
+                        placeholder="Type product name (e.g. Aata, Maida, Suji, Atta), Urdu name (آٹا، میدہ), SKU, or code to research..."
+                        className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                      {productSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProductSearchQuery('');
+                          }}
+                          className="p-1 text-slate-400 hover:text-slate-600 absolute right-2.5 top-2 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Category Filter Chips */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSearchCategory('all')}
+                        className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
+                          selectedSearchCategory === 'all'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-white/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        All Categories ({db.products.filter(p => p.isActive).length})
+                      </button>
+                      {Array.from(new Set(db.products.filter(p => p.isActive && p.category).map(p => p.category))).map(cat => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setSelectedSearchCategory(cat)}
+                          className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
+                            selectedSearchCategory === cat
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'bg-white/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Research Search Results Dropdown/Card list */}
+                  {(productSearchQuery.trim() || isProductCatalogBrowserOpen) && (
+                    <div className="max-h-64 overflow-y-auto space-y-2 pt-1 border-t border-indigo-100 dark:border-indigo-900/60">
+                      {matchedDispatchProducts.length === 0 ? (
+                        <div className="p-3 text-center text-xs text-slate-500 bg-white/60 dark:bg-slate-900/60 rounded-xl">
+                          No matching products found in inventory. You can add new products in Product Catalog or add a row below.
+                        </div>
+                      ) : (
+                        matchedDispatchProducts.map(prod => {
+                          const sizes = prod.bagSizes && prod.bagSizes.length > 0 ? prod.bagSizes : (mode === 'factory' ? [50] : [1]);
+                          const currentSize = selectedSearchBagSize[prod.id] || sizes[0];
+                          const balance = storage.getStockBalance(prod.id, currentSize);
+                          const available = balance ? balance.availableBags : 0;
+                          const applicableRate = getApplicableRate(prod.id, currentSize);
+                          const qty = selectedSearchQty[prod.id] || 1;
+
+                          return (
+                            <div
+                              key={prod.id}
+                              className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-2.5 hover:border-indigo-300 transition-all shadow-xs"
+                            >
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-xs text-slate-900 dark:text-white">{prod.nameEn}</span>
+                                  {prod.nameUr && (
+                                    <span className="text-xs font-bold text-purple-600 dark:text-purple-400 font-arabic" dir="rtl">
+                                      ({prod.nameUr})
+                                    </span>
+                                  )}
+                                  {prod.sku && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                      {prod.sku}
+                                    </span>
+                                  )}
+                                  {prod.barcode && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-50 dark:bg-indigo-950 text-indigo-500">
+                                      Barcode: {prod.barcode}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400 flex-wrap">
+                                  <span>Category: {prod.category || 'General'}</span>
+                                  <span>·</span>
+                                  <span className={`font-semibold ${available > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                                    Available Stock: {available} {mode === 'factory' ? 'Bags' : prod.unit || 'Units'}
+                                  </span>
+                                  <span>·</span>
+                                  <span className="font-bold text-indigo-600 dark:text-indigo-400 font-mono">
+                                    Rate: {currency} {applicableRate.toLocaleString()}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+                                {sizes.length > 1 && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-400">Size:</span>
+                                    <select
+                                      value={currentSize}
+                                      onChange={e =>
+                                        setSelectedSearchBagSize(prev => ({
+                                          ...prev,
+                                          [prod.id]: Number(e.target.value),
+                                        }))
+                                      }
+                                      className="px-2 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-slate-900 dark:text-white"
+                                    >
+                                      {sizes.map(s => (
+                                        <option key={s} value={s}>
+                                          {s} {mode === 'factory' ? 'kg' : prod.unit || 'unit'}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+
+                                {/* Quantity Stepper */}
+                                <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-800">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedSearchQty(prev => ({
+                                        ...prev,
+                                        [prod.id]: Math.max(1, (prev[prod.id] || 1) - 1),
+                                      }))
+                                    }
+                                    className="px-2 py-1 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={qty}
+                                    onChange={e =>
+                                      setSelectedSearchQty(prev => ({
+                                        ...prev,
+                                        [prod.id]: Math.max(1, Number(e.target.value) || 1),
+                                      }))
+                                    }
+                                    className="w-12 text-center text-xs py-1 font-mono font-bold bg-transparent outline-none text-slate-900 dark:text-white"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedSearchQty(prev => ({
+                                        ...prev,
+                                        [prod.id]: (prev[prod.id] || 1) + 1,
+                                      }))
+                                    }
+                                    className="px-2 py-1 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddProductFromSearch(prod, currentSize, qty)}
+                                  className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>+ Add to Invoice</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -1219,11 +1511,17 @@ export const SalesView: React.FC<SalesViewProps> = ({
                           >
                             {db.products
                               .filter(p => p.isActive)
-                              .map(p => (
-                                <option key={p.id} value={p.id}>
-                                  {p.nameEn} ({p.nameUr})
-                                </option>
-                              ))}
+                              .map(p => {
+                                const pSize = mode === 'factory' ? p.bagSizes?.[0] || 50 : 1;
+                                const b = storage.getStockBalance(p.id, pSize);
+                                const stockQty = b ? b.availableBags : 0;
+                                const r = getApplicableRate(p.id, pSize);
+                                return (
+                                  <option key={p.id} value={p.id}>
+                                    {p.nameEn} {p.nameUr ? `(${p.nameUr})` : ''} — Stock: {stockQty} — {currency} {r.toLocaleString()}
+                                  </option>
+                                );
+                              })}
                           </select>
                         </div>
 

@@ -39,10 +39,16 @@ export default function App() {
   const storage = StorageService.getInstance();
   const [db, setDb] = useState<AppDatabase>(storage.getDatabase());
 
-  const [currentModule, setCurrentModule] = useState<ModuleKey>('dashboard');
+  const [currentModule, setCurrentModule] = useState<ModuleKey>(() => {
+    const saved = localStorage.getItem('st_last_active_module') as ModuleKey;
+    return saved || 'dashboard';
+  });
   const [isAppLocked, setIsAppLocked] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return Boolean(localStorage.getItem('st_active_user_id'));
+  });
+  const [currentUserId, setCurrentUserId] = useState<string>(() => {
+    return localStorage.getItem('st_active_user_id') || '';
   });
   const [authInitialTab, setAuthInitialTab] = useState<'login' | 'signup'>('login');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -66,6 +72,77 @@ export default function App() {
     return () => unsubscribe();
   }, [storage]);
 
+  // Synchronize session state from Desktop userData store (%APPDATA%) on startup
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.desktopAPI?.loadSessionState) {
+      window.desktopAPI
+        .loadSessionState()
+        .then(res => {
+          if (res && res.success && res.session) {
+            const { activeUserId, lastModule } = res.session;
+            const allUsers = storage.getAllUsers();
+
+            if (activeUserId) {
+              const matched = allUsers.find(u => u.id === activeUserId);
+              if (matched) {
+                setCurrentUserId(matched.id);
+                localStorage.setItem('st_active_user_id', matched.id);
+                setIsAuthenticated(true);
+
+                if (matched.businessId && matched.businessId !== storage.getActiveBusinessId()) {
+                  storage.switchBusinessWorkspace(matched.businessId, matched.name);
+                }
+              }
+            }
+
+            if (lastModule && isModuleAllowedForBusinessType(lastModule as ModuleKey, storage.getActiveBusinessMode())) {
+              setCurrentModule(lastModule as ModuleKey);
+              localStorage.setItem('st_last_active_module', lastModule);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
+  // Persist session state whenever user or active module changes
+  useEffect(() => {
+    if (currentUserId) {
+      localStorage.setItem('st_active_user_id', currentUserId);
+    }
+    if (currentModule) {
+      localStorage.setItem('st_last_active_module', currentModule);
+    }
+    if (typeof window !== 'undefined' && window.desktopAPI?.saveSessionState) {
+      window.desktopAPI
+        .saveSessionState({
+          activeUserId: currentUserId,
+          lastModule: currentModule,
+        })
+        .catch(() => {});
+    }
+  }, [currentUserId, currentModule]);
+
+  // Handle window unload / close to guarantee current screen & active user are saved instantly
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (currentUserId) {
+        localStorage.setItem('st_active_user_id', currentUserId);
+      }
+      if (currentModule) {
+        localStorage.setItem('st_last_active_module', currentModule);
+      }
+      if (typeof window !== 'undefined' && window.desktopAPI?.saveSessionState) {
+        window.desktopAPI.saveSessionState({
+          activeUserId: currentUserId,
+          lastModule: currentModule,
+        });
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [currentUserId, currentModule]);
+
   // Automatic background update check on application startup
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -79,7 +156,19 @@ export default function App() {
   // Apply Theme & Direction
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('dark', 'theme-emerald', 'theme-cobalt', 'theme-flourpro', 'theme-ios-colorful');
+    root.classList.remove(
+      'dark',
+      'theme-emerald',
+      'theme-cobalt',
+      'theme-flourpro',
+      'theme-ios-colorful',
+      'theme-vivid-pro',
+      'theme-deskera-plum',
+      'theme-deskera-navy',
+      'theme-deskera-emerald',
+      'theme-deskera-crimson',
+      'theme-deskera-slate'
+    );
 
     if (db.settings.theme === 'midnight-dark') {
       root.classList.add('dark');
@@ -91,6 +180,18 @@ export default function App() {
       root.classList.add('theme-flourpro');
     } else if (db.settings.theme === 'ios-colorful') {
       root.classList.add('theme-ios-colorful');
+    } else if (db.settings.theme === 'vivid-pro') {
+      root.classList.add('theme-vivid-pro');
+    } else if (db.settings.theme === 'deskera-plum') {
+      root.classList.add('theme-deskera-plum');
+    } else if (db.settings.theme === 'deskera-navy') {
+      root.classList.add('theme-deskera-navy');
+    } else if (db.settings.theme === 'deskera-emerald') {
+      root.classList.add('theme-deskera-emerald');
+    } else if (db.settings.theme === 'deskera-crimson') {
+      root.classList.add('theme-deskera-crimson');
+    } else if (db.settings.theme === 'deskera-slate') {
+      root.classList.add('theme-deskera-slate');
     }
 
     if (db.settings.language === 'ur') {
@@ -100,10 +201,6 @@ export default function App() {
     }
   }, [db.settings.theme, db.settings.language]);
 
-  const [currentUserId, setCurrentUserId] = useState<string>(() => {
-    return localStorage.getItem('st_active_user_id') || '';
-  });
-
   const allSystemUsers = storage.getAllUsers();
   const currentUser: UserAccount | null = currentUserId
     ? allSystemUsers.find(u => u.id === currentUserId) ||
@@ -112,6 +209,45 @@ export default function App() {
     : null;
   const adminPin = currentUser ? currentUser.pinCode : '1234';
   const adminPasswordHash = currentUser ? currentUser.passwordHash : '';
+
+  // Online / Offline auto-backup & synchronization
+  const [onlineStatusBanner, setOnlineStatusBanner] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      storage
+        .performAutoOnlineSync(currentUser?.name || 'auto-sync')
+        .then(res => {
+          if (res.success) {
+            setOnlineStatusBanner(
+              'Internet connected: Local operations auto-backed up to cloud backend.'
+            );
+            setTimeout(() => setOnlineStatusBanner(null), 5000);
+          }
+        })
+        .catch(() => {});
+    };
+
+    const handleOffline = () => {
+      setOnlineStatusBanner(
+        'Offline Mode Active: Operating locally. All transactions will auto-sync when online.'
+      );
+      setTimeout(() => setOnlineStatusBanner(null), 5000);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial check on mount
+    if (typeof navigator !== 'undefined' && navigator.onLine && db.settings.hasUnsyncedChanges) {
+      storage.performAutoOnlineSync(currentUser?.name || 'auto-sync').catch(() => {});
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [currentUser?.name, db.settings.hasUnsyncedChanges]);
 
   // Enforce dynamic business mode module isolation at route/navigation level
   useEffect(() => {
@@ -146,7 +282,16 @@ export default function App() {
       !isModuleAllowedForBusinessType(currentModule, targetBizType) ||
       !storage.hasPermission(targetUser, currentModule)
     ) {
-      setCurrentModule('dashboard');
+      const savedModule = localStorage.getItem('st_last_active_module') as ModuleKey;
+      if (
+        savedModule &&
+        isModuleAllowedForBusinessType(savedModule, targetBizType) &&
+        storage.hasPermission(targetUser, savedModule)
+      ) {
+        setCurrentModule(savedModule);
+      } else {
+        setCurrentModule('dashboard');
+      }
     }
   };
 
@@ -163,11 +308,18 @@ export default function App() {
     setPendingProtectedAction(null);
     setCurrentUserId('');
     localStorage.removeItem('st_active_user_id');
+    if (typeof window !== 'undefined' && window.desktopAPI?.saveSessionState) {
+      window.desktopAPI
+        .saveSessionState({
+          activeUserId: '',
+          lastModule: 'dashboard',
+        })
+        .catch(() => {});
+    }
     // 3. Keep business and persistent storage intact
     // 4. Redirect user directly to Login page
     setAuthInitialTab('login');
     setIsAuthenticated(false);
-    setCurrentModule('dashboard');
   };
 
   // Select Module with RBAC Permission Check & PIN Guard Check
@@ -181,6 +333,11 @@ export default function App() {
     if (currentUser && !storage.hasPermission(currentUser, mod)) {
       return;
     }
+
+    // Persist user's selected module so closing and re-opening software resumes at exact screen
+    try {
+      localStorage.setItem('st_last_active_module', mod);
+    } catch {}
 
     if (db.settings.moduleProtection && db.settings.moduleProtection[mod]) {
       setPendingModuleKey(mod);
@@ -222,10 +379,20 @@ export default function App() {
     return (
       <LoginView
         db={db}
-        initialMode={authInitialTab}
+        initialMode="login"
         onLoginSuccess={user => {
           activateUserAndWorkspace(user);
-          setCurrentModule('dashboard');
+          const savedModule = localStorage.getItem('st_last_active_module') as ModuleKey;
+          const targetBizType = user.businessType || db.profile?.businessType || 'flour_mill';
+          if (
+            savedModule &&
+            isModuleAllowedForBusinessType(savedModule, targetBizType) &&
+            storage.hasPermission(user, savedModule)
+          ) {
+            setCurrentModule(savedModule);
+          } else {
+            setCurrentModule('dashboard');
+          }
         }}
       />
     );
@@ -268,6 +435,19 @@ export default function App() {
         onLogout={handleLogout}
         lang={db.settings.language}
       />
+
+      {onlineStatusBanner && (
+        <div className="bg-indigo-600 text-white text-xs py-1.5 px-4 font-semibold text-center flex items-center justify-center gap-2 animate-fadeIn z-40 shadow-xs">
+          <span>{onlineStatusBanner}</span>
+          <button
+            type="button"
+            onClick={() => setOnlineStatusBanner(null)}
+            className="text-white/80 hover:text-white text-[11px] font-bold px-1.5 py-0.5 rounded-md hover:bg-white/20 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Main Workspace Frame */}
       <div className="flex flex-1 overflow-hidden">

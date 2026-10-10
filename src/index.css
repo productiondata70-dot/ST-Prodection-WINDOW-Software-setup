@@ -196,5 +196,193 @@
   html.theme-ios-colorful .text-slate-600 {
     color: #8e8e93 !important;
   }
+
+  /* Vivid Pro Theme (Ultra-Colorful Professional Theme with Rich Brand Accents) */
+  html.theme-vivid-pro {
+    color-scheme: light;
+  }
+  html.theme-vivid-pro body,
+  html.theme-vivid-pro main,
+  html.theme-vivid-pro .bg-\[\#F8FAFC\] {
+    background: linear-gradient(135deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%) !important;
+    color: #0f172a !important;
+  }
+  html.theme-vivid-pro aside {
+    background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%) !important;
+    border-right-color: #e0e7ff !important;
+  }
+  html.theme-vivid-pro .bg-white {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.08), 0 8px 10px -6px rgba(147, 51, 234, 0.04) !important;
+  }
+  html.theme-vivid-pro .bg-slate-50,
+  html.theme-vivid-pro .bg-slate-100 {
+    background-color: #f8faff !important;
+    border-color: #e0e7ff !important;
+  }
+  html.theme-vivid-pro .border-slate-200,
+  html.theme-vivid-pro .border-slate-300 {
+    border-color: #e2e8f0 !important;
+  }
+
+  /* 1. Deskera Plum Velvet Theme (Exactly like the uploaded laptop screenshot) */
+  html.theme-deskera-plum {
+    color-scheme: light;
+  }
+  html.theme-deskera-plum body,
+  html.theme-deskera-plum main,
+  html.theme-deskera-plum .bg-\[\#F8FAFC\] {
+    background-color: #f4f5f9 !important;
+    color: #1e293b !important;
+  }
+  html.theme-deskera-plum aside {
+    background: linear-gradient(180deg, #380d3d 0%, #29082d 100%) !important;
+    border-right-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+  }
+  html.theme-deskera-plum aside .text-slate-600,
+  html.theme-deskera-plum aside .text-slate-700,
+  html.theme-deskera-plum aside .text-slate-800 {
+    color: #e2d9e4 !important;
+  }
+  html.theme-deskera-plum aside .text-slate-400,
+  html.theme-deskera-plum aside .text-slate-500 {
+    color: #bfaec4 !important;
+  }
+  html.theme-deskera-plum .bg-white {
+    background-color: #ffffff !important;
+    border-color: #e5e7eb !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04) !important;
+  }
+  html.theme-deskera-plum .bg-slate-50,
+  html.theme-deskera-plum .bg-slate-100 {
+    background-color: #f8f9fc !important;
+    border-color: #e5e7eb !important;
+  }
+  html.theme-deskera-plum .border-slate-200,
+  html.theme-deskera-plum .border-slate-300 {
+    border-color: #e5e7eb !important;
+  }
+
+  /* 2. Deskera Navy Sapphire Theme */
+  html.theme-deskera-navy {
+    color-scheme: light;
+  }
+  html.theme-deskera-navy body,
+  html.theme-deskera-navy main,
+  html.theme-deskera-navy .bg-\[\#F8FAFC\] {
+    background-color: #f3f6fa !important;
+    color: #0f172a !important;
+  }
+  html.theme-deskera-navy aside {
+    background: linear-gradient(180deg, #0a192f 0%, #061120 100%) !important;
+    border-right-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+  }
+  html.theme-deskera-navy aside .text-slate-600,
+  html.theme-deskera-navy aside .text-slate-700,
+  html.theme-deskera-navy aside .text-slate-800 {
+    color: #d1dced !important;
+  }
+  html.theme-deskera-navy aside .text-slate-400,
+  html.theme-deskera-navy aside .text-slate-500 {
+    color: #9cb3d6 !important;
+  }
+  html.theme-deskera-navy .bg-white {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04) !important;
+  }
+
+  /* 3. Deskera Forest Emerald Theme */
+  html.theme-deskera-emerald {
+    color-scheme: light;
+  }
+  html.theme-deskera-emerald body,
+  html.theme-deskera-emerald main,
+  html.theme-deskera-emerald .bg-\[\#F8FAFC\] {
+    background-color: #f2f8f5 !important;
+    color: #06281e !important;
+  }
+  html.theme-deskera-emerald aside {
+    background: linear-gradient(180deg, #072e22 0%, #031b14 100%) !important;
+    border-right-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+  }
+  html.theme-deskera-emerald aside .text-slate-600,
+  html.theme-deskera-emerald aside .text-slate-700,
+  html.theme-deskera-emerald aside .text-slate-800 {
+    color: #d2ebe0 !important;
+  }
+  html.theme-deskera-emerald aside .text-slate-400,
+  html.theme-deskera-emerald aside .text-slate-500 {
+    color: #9eccb9 !important;
+  }
+  html.theme-deskera-emerald .bg-white {
+    background-color: #ffffff !important;
+    border-color: #e0ece5 !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04) !important;
+  }
+
+  /* 4. Deskera Crimson Wine Theme */
+  html.theme-deskera-crimson {
+    color-scheme: light;
+  }
+  html.theme-deskera-crimson body,
+  html.theme-deskera-crimson main,
+  html.theme-deskera-crimson .bg-\[\#F8FAFC\] {
+    background-color: #faf4f6 !important;
+    color: #2e0510 !important;
+  }
+  html.theme-deskera-crimson aside {
+    background: linear-gradient(180deg, #3b0a17 0%, #26030c 100%) !important;
+    border-right-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+  }
+  html.theme-deskera-crimson aside .text-slate-600,
+  html.theme-deskera-crimson aside .text-slate-700,
+  html.theme-deskera-crimson aside .text-slate-800 {
+    color: #ebd3da !important;
+  }
+  html.theme-deskera-crimson aside .text-slate-400,
+  html.theme-deskera-crimson aside .text-slate-500 {
+    color: #cca4b0 !important;
+  }
+  html.theme-deskera-crimson .bg-white {
+    background-color: #ffffff !important;
+    border-color: #eddfe3 !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04) !important;
+  }
+
+  /* 5. Deskera Onyx Slate Theme */
+  html.theme-deskera-slate {
+    color-scheme: light;
+  }
+  html.theme-deskera-slate body,
+  html.theme-deskera-slate main,
+  html.theme-deskera-slate .bg-\[\#F8FAFC\] {
+    background-color: #f3f4f6 !important;
+    color: #111827 !important;
+  }
+  html.theme-deskera-slate aside {
+    background: linear-gradient(180deg, #141923 0%, #0b0e14 100%) !important;
+    border-right-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+  }
+  html.theme-deskera-slate aside .text-slate-600,
+  html.theme-deskera-slate aside .text-slate-700,
+  html.theme-deskera-slate aside .text-slate-800 {
+    color: #d1d5db !important;
+  }
+  html.theme-deskera-slate aside .text-slate-400,
+  html.theme-deskera-slate aside .text-slate-500 {
+    color: #9ca3af !important;
+  }
+  html.theme-deskera-slate .bg-white {
+    background-color: #ffffff !important;
+    border-color: #e5e7eb !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04) !important;
+  }
 }
 

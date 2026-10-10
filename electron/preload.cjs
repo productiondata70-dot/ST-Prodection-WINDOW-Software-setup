@@ -36,6 +36,10 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   saveUserData: serializedDb => ipcRenderer.invoke('storage:save-user-data', serializedDb),
   loadUserData: () => ipcRenderer.invoke('storage:load-user-data'),
 
+  // Active Session Persistence (Preserved across window close and restarts)
+  saveSessionState: sessionData => ipcRenderer.invoke('storage:save-session', sessionData),
+  loadSessionState: () => ipcRenderer.invoke('storage:load-session'),
+
   // Automatic Update System IPC
   getUpdaterInfo: () => ipcRenderer.invoke('updater:get-info'),
   checkForUpdates: options => ipcRenderer.invoke('updater:check', options),

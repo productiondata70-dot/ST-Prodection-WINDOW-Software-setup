@@ -490,23 +490,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ db, onNavigate, la
       {/* Main Statistics Cards (Section 4.2) */}
       {(() => {
         const isFlourPro = db.settings.theme === 'flourpro-light';
+        const isVivid = db.settings.theme === 'vivid-pro';
         return (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Total Production Weight */}
             <div
               className={`rounded-2xl border p-4 shadow-xs transition-all ${
-                isFlourPro
+                isVivid
+                  ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white border-blue-400 shadow-md shadow-blue-500/20'
+                  : isFlourPro
                   ? 'bg-gradient-to-br from-amber-50 to-amber-100/60 border-amber-300/80 shadow-amber-900/5 ring-1 ring-amber-300/40'
                   : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
               }`}
             >
-              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-                <span className={`text-xs font-semibold uppercase tracking-wider ${isFlourPro ? 'text-amber-900 font-bold' : ''}`}>
+              <div className={`flex items-center justify-between ${isVivid ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`text-xs font-semibold uppercase tracking-wider ${isVivid ? 'text-white font-bold' : isFlourPro ? 'text-amber-900 font-bold' : ''}`}>
                   {t.totalProductionWeight}
                 </span>
                 <div
                   className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                    isFlourPro
+                    isVivid
+                      ? 'bg-white/20 text-white'
+                      : isFlourPro
                       ? 'bg-amber-500/15 text-amber-800 border border-amber-300/60'
                       : 'bg-blue-50 dark:bg-blue-950/60 text-blue-600'
                   }`}
@@ -517,16 +522,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ db, onNavigate, la
               <div className="mt-2 flex items-baseline gap-2">
                 <span
                   className={`text-2xl font-bold font-mono tabular-nums ${
-                    isFlourPro ? 'text-amber-950' : 'text-slate-900 dark:text-white'
+                    isVivid ? 'text-white' : isFlourPro ? 'text-amber-950' : 'text-slate-900 dark:text-white'
                   }`}
                 >
                   {totalProductionWeight.toLocaleString()}
                 </span>
-                <span className={`text-xs font-medium ${isFlourPro ? 'text-amber-800' : 'text-slate-500'}`}>kg</span>
+                <span className={`text-xs font-medium ${isVivid ? 'text-blue-100' : isFlourPro ? 'text-amber-800' : 'text-slate-500'}`}>kg</span>
               </div>
-              <div className={`mt-2 text-xs flex items-center gap-1 ${isFlourPro ? 'text-amber-800/80' : 'text-slate-500'}`}>
+              <div className={`mt-2 text-xs flex items-center gap-1 ${isVivid ? 'text-blue-100' : isFlourPro ? 'text-amber-800/80' : 'text-slate-500'}`}>
                 <span>Production Volume:</span>
-                <strong className={`font-mono ${isFlourPro ? 'text-amber-950' : 'text-slate-700 dark:text-slate-300'}`}>
+                <strong className={`font-mono ${isVivid ? 'text-white' : isFlourPro ? 'text-amber-950' : 'text-slate-700 dark:text-slate-300'}`}>
                   {(totalProductionWeight / 1000).toFixed(2)} Metric Tons
                 </strong>
               </div>
@@ -535,18 +540,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ db, onNavigate, la
             {/* Total Production Bags */}
             <div
               className={`rounded-2xl border p-4 shadow-xs transition-all ${
-                isFlourPro
+                isVivid
+                  ? 'bg-gradient-to-br from-amber-500 to-orange-600 text-white border-amber-400 shadow-md shadow-amber-500/20'
+                  : isFlourPro
                   ? 'bg-gradient-to-br from-orange-50 to-orange-100/60 border-orange-300/80 shadow-orange-900/5 ring-1 ring-orange-300/40'
                   : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
               }`}
             >
-              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-                <span className={`text-xs font-semibold uppercase tracking-wider ${isFlourPro ? 'text-orange-900 font-bold' : ''}`}>
+              <div className={`flex items-center justify-between ${isVivid ? 'text-amber-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`text-xs font-semibold uppercase tracking-wider ${isVivid ? 'text-white font-bold' : isFlourPro ? 'text-orange-900 font-bold' : ''}`}>
                   {t.totalProductionBags}
                 </span>
                 <div
                   className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                    isFlourPro
+                    isVivid
+                      ? 'bg-white/20 text-white'
+                      : isFlourPro
                       ? 'bg-orange-500/15 text-orange-800 border border-orange-300/60'
                       : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600'
                   }`}
@@ -557,16 +566,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ db, onNavigate, la
               <div className="mt-2 flex items-baseline gap-2">
                 <span
                   className={`text-2xl font-bold font-mono tabular-nums ${
-                    isFlourPro ? 'text-orange-950' : 'text-slate-900 dark:text-white'
+                    isVivid ? 'text-white' : isFlourPro ? 'text-orange-950' : 'text-slate-900 dark:text-white'
                   }`}
                 >
                   {totalProductionBags.toLocaleString()}
                 </span>
-                <span className={`text-xs font-medium ${isFlourPro ? 'text-orange-800' : 'text-slate-500'}`}>{t.bags}</span>
+                <span className={`text-xs font-medium ${isVivid ? 'text-amber-100' : isFlourPro ? 'text-orange-800' : 'text-slate-500'}`}>{t.bags}</span>
               </div>
-              <div className={`mt-2 text-xs flex items-center gap-1 ${isFlourPro ? 'text-orange-800/80' : 'text-slate-500'}`}>
+              <div className={`mt-2 text-xs flex items-center gap-1 ${isVivid ? 'text-amber-100' : isFlourPro ? 'text-orange-800/80' : 'text-slate-500'}`}>
                 <span>Sessions Recorded:</span>
-                <strong className={isFlourPro ? 'text-orange-950' : 'text-slate-700 dark:text-slate-300'}>
+                <strong className={isVivid ? 'text-white' : isFlourPro ? 'text-orange-950' : 'text-slate-700 dark:text-slate-300'}>
                   {db.productionSessions.length} shifts
                 </strong>
               </div>
@@ -575,18 +584,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ db, onNavigate, la
             {/* Available Stock */}
             <div
               className={`rounded-2xl border p-4 shadow-xs transition-all ${
-                isFlourPro
+                isVivid
+                  ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-500/20'
+                  : isFlourPro
                   ? 'bg-gradient-to-br from-emerald-50 to-teal-100/60 border-emerald-300/80 shadow-emerald-900/5 ring-1 ring-emerald-300/40'
                   : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
               }`}
             >
-              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-                <span className={`text-xs font-semibold uppercase tracking-wider ${isFlourPro ? 'text-emerald-900 font-bold' : ''}`}>
+              <div className={`flex items-center justify-between ${isVivid ? 'text-emerald-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`text-xs font-semibold uppercase tracking-wider ${isVivid ? 'text-white font-bold' : isFlourPro ? 'text-emerald-900 font-bold' : ''}`}>
                   {t.availableStockBags}
                 </span>
                 <div
                   className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                    isFlourPro
+                    isVivid
+                      ? 'bg-white/20 text-white'
+                      : isFlourPro
                       ? 'bg-emerald-500/15 text-emerald-800 border border-emerald-300/60'
                       : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600'
                   }`}
@@ -597,16 +610,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ db, onNavigate, la
               <div className="mt-2 flex items-baseline gap-2">
                 <span
                   className={`text-2xl font-bold font-mono tabular-nums ${
-                    isFlourPro ? 'text-emerald-950' : 'text-slate-900 dark:text-white'
+                    isVivid ? 'text-white' : isFlourPro ? 'text-emerald-950' : 'text-slate-900 dark:text-white'
                   }`}
                 >
                   {availableStockBags.toLocaleString()}
                 </span>
-                <span className={`text-xs font-medium ${isFlourPro ? 'text-emerald-800' : 'text-slate-500'}`}>{t.bags} in Mill</span>
+                <span className={`text-xs font-medium ${isVivid ? 'text-emerald-100' : isFlourPro ? 'text-emerald-800' : 'text-slate-500'}`}>{t.bags} in Mill</span>
               </div>
-              <div className={`mt-2 text-xs flex items-center gap-1 ${isFlourPro ? 'text-emerald-800/80' : 'text-slate-500'}`}>
+              <div className={`mt-2 text-xs flex items-center gap-1 ${isVivid ? 'text-emerald-100' : isFlourPro ? 'text-emerald-800/80' : 'text-slate-500'}`}>
                 <span>Total Weight:</span>
-                <strong className={`font-mono ${isFlourPro ? 'text-emerald-950' : 'text-slate-700 dark:text-slate-300'}`}>
+                <strong className={`font-mono ${isVivid ? 'text-white' : isFlourPro ? 'text-emerald-950' : 'text-slate-700 dark:text-slate-300'}`}>
                   {availableStockWeight.toLocaleString()} kg
                 </strong>
               </div>
@@ -615,18 +628,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ db, onNavigate, la
             {/* Total Sales Value */}
             <div
               className={`rounded-2xl border p-4 shadow-xs transition-all ${
-                isFlourPro
+                isVivid
+                  ? 'bg-gradient-to-br from-violet-600 to-purple-700 text-white border-purple-400 shadow-md shadow-purple-500/20'
+                  : isFlourPro
                   ? 'bg-gradient-to-br from-indigo-50 to-blue-100/60 border-indigo-300/80 shadow-indigo-900/5 ring-1 ring-indigo-300/40'
                   : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
               }`}
             >
-              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-                <span className={`text-xs font-semibold uppercase tracking-wider ${isFlourPro ? 'text-indigo-900 font-bold' : ''}`}>
+              <div className={`flex items-center justify-between ${isVivid ? 'text-violet-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`text-xs font-semibold uppercase tracking-wider ${isVivid ? 'text-white font-bold' : isFlourPro ? 'text-indigo-900 font-bold' : ''}`}>
                   {t.totalSalesValue}
                 </span>
                 <div
                   className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                    isFlourPro
+                    isVivid
+                      ? 'bg-white/20 text-white'
+                      : isFlourPro
                       ? 'bg-indigo-500/15 text-indigo-800 border border-indigo-300/60'
                       : 'bg-purple-50 dark:bg-purple-950/60 text-purple-600'
                   }`}
@@ -635,10 +652,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ db, onNavigate, la
                 </div>
               </div>
               <div className="mt-2 flex items-baseline gap-2">
-                <span className={`text-xs font-bold ${isFlourPro ? 'text-indigo-700' : 'text-slate-400'}`}>{currency}</span>
+                <span className={`text-xs font-bold ${isVivid ? 'text-violet-200' : isFlourPro ? 'text-indigo-700' : 'text-slate-400'}`}>{currency}</span>
                 <span
                   className={`text-2xl font-bold font-mono tabular-nums ${
-                    isFlourPro ? 'text-indigo-950' : 'text-slate-900 dark:text-white'
+                    isVivid ? 'text-white' : isFlourPro ? 'text-indigo-950' : 'text-slate-900 dark:text-white'
                   }`}
                 >
                   {totalSalesValue.toLocaleString()}

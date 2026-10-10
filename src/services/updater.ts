@@ -11,6 +11,8 @@ export interface DesktopUpdaterAPI {
   closeWindow?: () => void;
   saveUserData?: (serializedDb: string) => Promise<{ success: boolean; path?: string; error?: string }>;
   loadUserData?: () => Promise<{ success: boolean; data: string | null; path?: string }>;
+  saveSessionState?: (sessionData: { activeUserId: string; lastModule: string }) => Promise<{ success: boolean; error?: string }>;
+  loadSessionState?: () => Promise<{ success: boolean; session: { activeUserId?: string; lastModule?: string } | null }>;
   getUpdaterInfo?: () => Promise<{
     currentVersion: string;
     platform: string;

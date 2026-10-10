@@ -121,6 +121,10 @@ function getPreUpdateBackupPath() {
   return path.join(app.getPath('userData'), 'pre_update_backup.json');
 }
 
+function getSessionStatePath() {
+  return path.join(app.getPath('userData'), 'st_session_state.json');
+}
+
 /**
  * Atomically write JSON string to disk in %APPDATA%
  * @param {string} filePath
@@ -371,19 +375,33 @@ function startLocalServer(distDir) {
       }
     });
 
-    // Listen on 127.0.0.1 on an available port assigned by OS
-    server.listen(0, '127.0.0.1', () => {
+    // Listen on fixed dedicated port 39780 so origin and localStorage remain identical across restarts
+    const PREFERRED_PORT = 39780;
+
+    server.once('error', err => {
+      console.warn('Preferred port 39780 busy or unavailable, falling back to dynamic port:', err && err.message);
+      try {
+        server.listen(0, '127.0.0.1', () => {
+          const addr = server.address();
+          const port = addr && typeof addr === 'object' ? addr.port : 0;
+          localServerInstance = server;
+          localServerUrl = `http://localhost:${port}`;
+          console.log(`Local production server running at fallback ${localServerUrl}`);
+          resolve(localServerUrl);
+        });
+      } catch (fallbackErr) {
+        console.warn('Failed to start local static server, falling back to file:// loading:', fallbackErr);
+        resolve(null);
+      }
+    });
+
+    server.listen(PREFERRED_PORT, '127.0.0.1', () => {
       const addr = server.address();
-      const port = addr && typeof addr === 'object' ? addr.port : 0;
+      const port = addr && typeof addr === 'object' ? addr.port : PREFERRED_PORT;
       localServerInstance = server;
       localServerUrl = `http://localhost:${port}`;
       console.log(`Local production server running at ${localServerUrl}`);
       resolve(localServerUrl);
-    });
-
-    server.on('error', err => {
-      console.warn('Failed to start local static server, falling back to file:// loading:', err);
-      resolve(null);
     });
   });
 }
@@ -459,8 +477,18 @@ async function createWindow() {
   if (devUrl) {
     mainWindow.loadURL(devUrl);
   } else {
-    // In production build, serve bundled Vite dist via local server on localhost
-    const distDir = path.join(__dirname, '../dist');
+    // In production build, resolve bundled Vite dist directory across packaged, unpacked, and root layouts
+    const possibleDistDirs = [
+      path.join(__dirname, '../dist'),
+      path.join(app.getAppPath(), 'dist'),
+      path.join(process.resourcesPath || '', 'app.asar/dist'),
+      path.join(process.resourcesPath || '', 'app/dist'),
+      path.join(__dirname, 'dist'),
+      path.join(process.cwd(), 'dist'),
+    ];
+
+    let distDir = possibleDistDirs.find(d => fs.existsSync(path.join(d, 'index.html'))) || path.join(__dirname, '../dist');
+
     if (!localServerUrl) {
       await startLocalServer(distDir);
     }
@@ -538,6 +566,34 @@ ipcMain.handle('storage:load-user-data', async () => {
   } catch (err) {
     console.warn('Failed to load persistent userData backup:', err);
     return { success: false, data: null };
+  }
+});
+
+ipcMain.handle('storage:save-session', async (_event, sessionData) => {
+  try {
+    if (sessionData && typeof sessionData === 'object') {
+      writeAtomicFile(getSessionStatePath(), JSON.stringify(sessionData));
+      return { success: true };
+    }
+    return { success: false, error: 'Invalid session payload' };
+  } catch (err) {
+    console.warn('Failed to persist session state:', err);
+    return { success: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('storage:load-session', async () => {
+  try {
+    const sPath = getSessionStatePath();
+    if (fs.existsSync(sPath)) {
+      const content = fs.readFileSync(sPath, 'utf-8');
+      const session = JSON.parse(content);
+      return { success: true, session };
+    }
+    return { success: true, session: null };
+  } catch (err) {
+    console.warn('Failed to load session state:', err);
+    return { success: false, session: null };
   }
 });
 

@@ -93,6 +93,40 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [broadcastPriority, setBroadcastPriority] = useState<'normal' | 'high' | 'urgent'>('normal');
 
+  // Backend Pre-Authorized Emails Whitelist state
+  const [whitelistEmailInput, setWhitelistEmailInput] = useState('');
+
+  const handleAddWhitelistEmail = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = whitelistEmailInput.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes('@')) {
+      setNotificationMsg({ type: 'error', text: 'Please enter a valid email address.' });
+      return;
+    }
+    try {
+      storage.addAuthorizedBackendEmail(trimmed, currentUser);
+      setNotificationMsg({
+        type: 'success',
+        text: `Email "${trimmed}" successfully authorized in backend! User can now sign up.`,
+      });
+      setWhitelistEmailInput('');
+    } catch (err: any) {
+      setNotificationMsg({ type: 'error', text: err.message || 'Failed to add email to whitelist.' });
+    }
+  };
+
+  const handleRemoveWhitelistEmail = (email: string) => {
+    try {
+      storage.removeAuthorizedBackendEmail(email, currentUser);
+      setNotificationMsg({
+        type: 'success',
+        text: `Email "${email}" removed from backend authorized whitelist.`,
+      });
+    } catch (err: any) {
+      setNotificationMsg({ type: 'error', text: err.message || 'Failed to remove email.' });
+    }
+  };
+
   // Section Navigation Tabs (Requirement 6)
   const [adminTab, setAdminTab] = useState<'dashboard' | 'price_control' | 'users' | 'cloud_sync' | 'security' | 'profile' | 'products' | 'broadcast'>('dashboard');
 
@@ -1071,77 +1105,48 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
             </div>
           </div>
 
-          {/* Quick Actions and Catalog overview */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Shield className="w-4 h-4 text-blue-600" />
-                <span>Administrative Controls Center</span>
-              </h3>
-              <p className="text-xs text-slate-500">
-                All high-privilege configuration options have been centralized in the Admin Panel to prevent unauthorized modification by operators.
-              </p>
-              <div className="grid grid-cols-2 gap-2 pt-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('users')}
-                  className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl font-bold text-left hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-all flex items-center justify-between"
-                >
-                  <span>Staff & Roles</span>
-                  <Users className="w-4 h-4 text-indigo-600" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('cloud_sync')}
-                  className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl font-bold text-left hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-all flex items-center justify-between"
-                >
-                  <span>Cloud Backup</span>
-                  <Cloud className="w-4 h-4 text-blue-600" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('security')}
-                  className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl font-bold text-left hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-all flex items-center justify-between"
-                >
-                  <span>PIN Lock Policies</span>
-                  <Lock className="w-4 h-4 text-purple-600" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('profile')}
-                  className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl font-bold text-left hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-all flex items-center justify-between"
-                >
-                  <span>Mill Profile</span>
-                  <Building2 className="w-4 h-4 text-blue-600" />
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Package className="w-4 h-4 text-indigo-600" />
-                <span>Production Catalog Overview</span>
-              </h3>
-              <p className="text-xs text-slate-500">
-                Overview of current active products and bag sizes configured for milling operations.
-              </p>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                {db.products.map(p => (
-                  <div
-                    key={p.id}
-                    className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs"
-                  >
-                    <div>
-                      <span className="font-bold text-slate-900 dark:text-white">{p.nameEn}</span>
-                      <span className="text-slate-300 mx-1.5">·</span>
-                      <span className="text-purple-600 font-bold" dir="rtl">{p.nameUr}</span>
-                    </div>
-                    <span className="text-slate-400 font-mono text-[11px]">
-                      {p.bagSizes.map(s => `${s}kg`).join(', ')}
-                    </span>
-                  </div>
-                ))}
-              </div>
+          {/* Administrative Controls Center */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Shield className="w-4 h-4 text-blue-600" />
+              <span>Administrative Controls Center</span>
+            </h3>
+            <p className="text-xs text-slate-500">
+              All high-privilege configuration options have been centralized in the Admin Panel to prevent unauthorized modification by operators.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setAdminTab('users')}
+                className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl font-bold text-left hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-all flex items-center justify-between"
+              >
+                <span>Staff & Roles</span>
+                <Users className="w-4 h-4 text-indigo-600" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminTab('cloud_sync')}
+                className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl font-bold text-left hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-all flex items-center justify-between"
+              >
+                <span>Cloud Backup</span>
+                <Cloud className="w-4 h-4 text-blue-600" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminTab('security')}
+                className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl font-bold text-left hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-all flex items-center justify-between"
+              >
+                <span>PIN Lock Policies</span>
+                <Lock className="w-4 h-4 text-purple-600" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminTab('profile')}
+                className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl font-bold text-left hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-all flex items-center justify-between"
+              >
+                <span>Mill Profile</span>
+                <Building2 className="w-4 h-4 text-blue-600" />
+              </button>
             </div>
           </div>
         </div>
@@ -1618,6 +1623,66 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* CARD 3: BACKEND PRE-AUTHORIZED EMAILS WHITELIST */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 gap-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Backend Pre-Authorized Whitelist (فائر بیس و بیک اینڈ مجاز ای میلز)
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Only emails listed here can complete new account registration and sign-up. Whitelist users before they sign up.
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg font-bold">
+                {storage.getAuthorizedBackendEmails().length} Authorized
+              </span>
+            </div>
+
+            {/* Quick Add Form */}
+            <form onSubmit={handleAddWhitelistEmail} className="flex gap-2">
+              <input
+                type="email"
+                value={whitelistEmailInput}
+                onChange={e => setWhitelistEmailInput(e.target.value)}
+                placeholder="Enter email to authorize for sign-up (e.g. staff@example.com)..."
+                className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer"
+              >
+                + Whitelist Email
+              </button>
+            </form>
+
+            {/* Whitelist Badges */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {storage.getAuthorizedBackendEmails().map(email => (
+                <div
+                  key={email}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-700 dark:text-slate-200"
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span>{email}</span>
+                  {email !== 'productiondata70@gmail.com' && email !== 'admin@stproduction.com' && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveWhitelistEmail(email)}
+                      className="ml-1 text-slate-400 hover:text-rose-500 cursor-pointer"
+                      title="Remove from whitelist"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </div>

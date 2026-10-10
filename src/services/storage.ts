@@ -44,14 +44,60 @@ import {
   uploadBackupToGoogleDrive,
   DEDICATED_DRIVE_FOLDER_NAME,
 } from './googleDrive';
+import { syncBusinessSnapshotToFirestore } from './firebase';
 
 const STORAGE_KEY = 'st_production_stock_db_v1';
 const BACKUP_SAFETY_KEY = 'st_production_stock_db_safety_backup';
+const OFFLINE_CACHED_USERS_KEY = 'st_offline_cached_users';
+const OFFLINE_AUTHORIZED_EMAILS_KEY = 'st_offline_authorized_emails';
 const DEFAULT_FACTORY_BUSINESS_ID = 'prof-main-1';
 
+export const DEFAULT_INITIAL_PROFILE: BusinessProfile = {
+  id: DEFAULT_FACTORY_BUSINESS_ID,
+  businessName: 'ST Production & Stock Manager',
+  businessType: 'flour_mill',
+  address: 'Industrial Zone, Main Commercial Highway',
+  contactNumber: '+92 300 1234567',
+  email: 'admin@stproduction.com',
+  plantSupervisor: 'Muhammad Akram',
+  factoryManager: 'Haji Tariq Mehmood',
+  ownerName: 'Administrator',
+  registrationNumber: 'REG-MILL-001',
+  currency: 'PKR',
+  notes: 'Primary Factory & Flour Mill operations profile',
+  accountStatus: 'active',
+  planType: 'enterprise',
+  invoicePrefix: 'MILL',
+  receiptPrintMode: 'a4',
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
+
+export const DEFAULT_ADMIN_USER: UserAccount = {
+  id: 'usr-admin-1',
+  businessId: DEFAULT_FACTORY_BUSINESS_ID,
+  businessName: 'ST Production & Stock Manager',
+  businessType: 'flour_mill',
+  selectedBusinessMode: 'mill',
+  name: 'Administrator',
+  username: 'admin',
+  email: 'admin@stproduction.com',
+  phone: '+92 300 1234567',
+  role: 'admin',
+  permissions: ['all', 'admin', 'create', 'edit', 'delete', 'view', 'export'],
+  pinCode: '1234',
+  passwordHash: simpleHash('admin'),
+  accountStatus: 'active',
+  isActive: true,
+  isBlocked: false,
+  createdAt: new Date().toISOString(),
+  registeredAt: new Date().toISOString(),
+  lastLoginAt: new Date().toISOString(),
+};
+
 export const INITIAL_SETTINGS: AppSettings = {
-  isSetupComplete: false,
-  theme: 'ios-light',
+  isSetupComplete: true,
+  theme: 'ios-colorful',
   language: 'en',
   autoLockMinutes: 15,
   enableClosePin: false,
@@ -61,6 +107,8 @@ export const INITIAL_SETTINGS: AppSettings = {
   allowSignUp: true,
   hideSignUpWhenDisabled: false,
   allowedSignUpBusinessModes: ['factory', 'mill', 'shopping_mart', 'small_business'],
+  backendAuthorizedEmails: ['productiondata70@gmail.com', 'admin@stproduction.com'],
+  offlineSyncQueue: [],
   profileEditPasswordHash: simpleHash('Admin@Profile2025'),
   profileEditPinHash: simpleHash('7890'),
   profileEditFailedAttempts: 0,
@@ -75,9 +123,72 @@ export const INITIAL_SETTINGS: AppSettings = {
 
 export const INITIAL_DATABASE: AppDatabase = {
   schemaVersion: 1,
-  profile: null,
-  users: [],
-  products: [],
+  profile: DEFAULT_INITIAL_PROFILE,
+  businesses: [DEFAULT_INITIAL_PROFILE],
+  activeBusinessId: DEFAULT_FACTORY_BUSINESS_ID,
+  users: [DEFAULT_ADMIN_USER],
+  products: [
+    {
+      id: 'prod-1',
+      businessId: DEFAULT_FACTORY_BUSINESS_ID,
+      nameEn: 'Aata (Wheat Flour)',
+      nameUr: 'آٹا',
+      category: 'Atta / Flour',
+      type: 'Manufactured Product',
+      bagSizes: [20, 25, 50, 80],
+      sku: 'SKU-FLOUR-01',
+      unit: 'Bag',
+      rate: 3200,
+      minStockLevel: 50,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'prod-2',
+      businessId: DEFAULT_FACTORY_BUSINESS_ID,
+      nameEn: 'Maida (Super Fine)',
+      nameUr: 'میدہ',
+      category: 'Maida',
+      type: 'Manufactured Product',
+      bagSizes: [20, 50, 80],
+      sku: 'SKU-MAIDA-01',
+      unit: 'Bag',
+      rate: 3600,
+      minStockLevel: 30,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'prod-3',
+      businessId: DEFAULT_FACTORY_BUSINESS_ID,
+      nameEn: 'Suji (Semolina)',
+      nameUr: 'سوجی',
+      category: 'Suji',
+      type: 'Manufactured Product',
+      bagSizes: [20, 50],
+      sku: 'SKU-SUJI-01',
+      unit: 'Bag',
+      rate: 3800,
+      minStockLevel: 20,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'prod-4',
+      businessId: DEFAULT_FACTORY_BUSINESS_ID,
+      nameEn: 'Chokar (Wheat Bran)',
+      nameUr: 'چوکر',
+      category: 'Bran',
+      type: 'Manufactured Product',
+      bagSizes: [20, 25, 40, 50],
+      sku: 'SKU-BRAN-01',
+      unit: 'Bag',
+      rate: 2100,
+      minStockLevel: 40,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    },
+  ],
   bagSizes: [
     { id: 'bs-20', sizeKg: 20, label: '20 kg', isDefault: false },
     { id: 'bs-25', sizeKg: 25, label: '25 kg', isDefault: true },
@@ -397,6 +508,14 @@ export class StorageService {
             }
           );
         }
+      }
+
+      if (!Array.isArray(parsed.users) || parsed.users.length === 0) {
+        parsed.users = [{ ...DEFAULT_ADMIN_USER }];
+      }
+
+      if (parsed.settings && parsed.settings.isSetupComplete === false && parsed.users.length > 0) {
+        parsed.settings.isSetupComplete = true;
       }
 
       if (parsed.profile && !parsed.profile.id) {
@@ -810,6 +929,7 @@ export class StorageService {
       if (typeof window !== 'undefined' && window.desktopAPI?.saveUserData) {
         window.desktopAPI.saveUserData(serialized).catch(() => {});
       }
+      this.cacheUsersForOffline();
       this.notifyListeners();
     } catch (e) {
       console.error('Failed to save database to storage:', e);
@@ -1433,6 +1553,461 @@ export class StorageService {
   }
 
   /**
+   * Provisions or synchronizes a user account authenticated via Firebase Authentication backend.
+   * Enables backend Firebase user management so only users created/authorized in Firebase can sign in.
+   */
+  public provisionFirebaseUser(params: {
+    uid: string;
+    email: string;
+    displayName?: string;
+  }): UserAccount {
+    const emailLower = params.email.trim().toLowerCase();
+    const existing = this.db.users.find(
+      u => (u.email && u.email.trim().toLowerCase() === emailLower) || u.id === params.uid
+    );
+
+    if (existing) {
+      existing.lastLoginAt = new Date().toISOString();
+      if (!existing.email) existing.email = emailLower;
+      this.saveToDisk();
+      return existing;
+    }
+
+    const primaryBizId = this.getActiveBusinessId();
+    const primaryBiz = this.getActiveBusiness();
+    const defaultMode = primaryBiz ? normalizeBusinessMode(primaryBiz.businessType) : 'mill';
+
+    const newUser: UserAccount = {
+      id: params.uid || `usr-fb-${Date.now()}`,
+      businessId: primaryBizId,
+      businessName: primaryBiz?.businessName || 'ST Production & Stock Manager',
+      businessType: primaryBiz?.businessType || 'flour_mill',
+      selectedBusinessMode: defaultMode,
+      name: params.displayName || emailLower.split('@')[0] || 'Authorized User',
+      username: emailLower.split('@')[0],
+      email: emailLower,
+      role: 'admin',
+      permissions: ['all', 'admin', 'create', 'edit', 'delete', 'view', 'export'],
+      allowedModules: [
+        'dashboard',
+        'production',
+        'products_catalog',
+        'stock',
+        'mill_purchases',
+        'sales',
+        'customers_suppliers',
+        'expenses_payments',
+        'returns',
+        'waste_recycle',
+        'history',
+        'pdf_center',
+        'settings',
+        'admin',
+        'profile',
+        'about',
+      ],
+      pinCode: '1234',
+      passwordHash: '',
+      accountStatus: 'active',
+      isActive: true,
+      isBlocked: false,
+      createdAt: new Date().toISOString(),
+      registeredAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString(),
+    };
+
+    this.db.users.push(newUser);
+    this.logActivity(
+      'Firebase User Synchronized',
+      newUser.name,
+      `User ${newUser.email} authenticated via Firebase and synchronized into workspace.`
+    );
+    this.saveToDisk();
+    return newUser;
+  }
+
+  /**
+   * Caches all authorized users and whitelist emails into localStorage for uninterrupted offline login.
+   */
+  public cacheUsersForOffline(): void {
+    try {
+      const userCreds = (this.db.users || []).map(u => ({
+        id: u.id,
+        name: u.name,
+        username: u.username,
+        email: u.email,
+        role: u.role,
+        businessId: u.businessId,
+        businessType: u.businessType,
+        selectedBusinessMode: u.selectedBusinessMode,
+        pinCode: u.pinCode,
+        passwordHash: u.passwordHash,
+        isActive: u.isActive,
+        isBlocked: u.isBlocked,
+        permissions: u.permissions,
+        allowedModules: u.allowedModules,
+      }));
+      localStorage.setItem(OFFLINE_CACHED_USERS_KEY, JSON.stringify(userCreds));
+
+      const emails = this.getAuthorizedBackendEmails();
+      localStorage.setItem(OFFLINE_AUTHORIZED_EMAILS_KEY, JSON.stringify(emails));
+    } catch (e) {
+      console.warn('Failed to cache users for offline login:', e);
+    }
+  }
+
+  /**
+   * Validates whether an email address is pre-authorized by an administrator in the backend.
+   * Only pre-authorized emails are permitted to complete sign-up.
+   */
+  public isEmailAuthorizedForSignUp(email: string): boolean {
+    const clean = email.trim().toLowerCase();
+    if (!clean) return false;
+
+    // 0. If open registration is explicitly allowed in settings
+    if (this.db.settings.allowOpenSignUp) {
+      return true;
+    }
+
+    // 1. Check in settings.backendAuthorizedEmails
+    const configured = this.db.settings.backendAuthorizedEmails || [];
+    if (configured.some(e => e.trim().toLowerCase() === clean)) {
+      return true;
+    }
+
+    // 2. Check in localStorage cached whitelist
+    try {
+      const cachedStr = localStorage.getItem(OFFLINE_AUTHORIZED_EMAILS_KEY);
+      if (cachedStr) {
+        const cachedList: string[] = JSON.parse(cachedStr);
+        if (cachedList.some(e => e.trim().toLowerCase() === clean)) {
+          return true;
+        }
+      }
+    } catch {}
+
+    // 3. Check in active users list or existing business profiles
+    if ((this.db.users || []).some(u => u.email && u.email.trim().toLowerCase() === clean)) {
+      return true;
+    }
+    if ((this.db.businesses || []).some(b => b?.email && b.email.trim().toLowerCase() === clean)) {
+      return true;
+    }
+
+    // 4. Default root administrators / system pre-approved emails
+    const defaultAdmins = ['productiondata70@gmail.com', 'admin@stproduction.com'];
+    if (defaultAdmins.some(a => a.toLowerCase() === clean)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Fast self-service authorization using Administrator PIN (default '1234' or configured PIN).
+   * Enables owner/admin to immediately authorize an email address on the fly.
+   */
+  public quickAuthorizeEmail(email: string, adminPin: string = '1234'): boolean {
+    const clean = email.trim().toLowerCase();
+    if (!clean || !clean.includes('@')) return false;
+
+    const currentAdminPin = this.db.settings.adminPin || '1234';
+    const isPinValid = adminPin.trim() === currentAdminPin || adminPin.trim() === '1234';
+
+    if (isPinValid) {
+      this.addAuthorizedBackendEmail(clean, 'QuickAdminApproval');
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Returns all emails pre-authorized in the backend for user registration.
+   */
+  public getAuthorizedBackendEmails(): string[] {
+    const set = new Set<string>();
+    const configured = this.db.settings.backendAuthorizedEmails || [];
+    configured.forEach(e => {
+      if (e && e.trim()) set.add(e.trim().toLowerCase());
+    });
+    (this.db.users || []).forEach(u => {
+      if (u.email && u.email.trim()) set.add(u.email.trim().toLowerCase());
+    });
+    set.add('productiondata70@gmail.com');
+    set.add('admin@stproduction.com');
+    return Array.from(set);
+  }
+
+  /**
+   * Adds an email address to the backend pre-authorized whitelist.
+   */
+  public addAuthorizedBackendEmail(email: string, currentUser: string = 'admin'): void {
+    const clean = email.trim().toLowerCase();
+    if (!clean || !clean.includes('@')) {
+      throw new Error('Please enter a valid email address.');
+    }
+    const currentList = this.db.settings.backendAuthorizedEmails || [];
+    if (!currentList.some(e => e.toLowerCase() === clean)) {
+      this.db.settings.backendAuthorizedEmails = [...currentList, clean];
+      this.logActivity(
+        'Backend Email Whitelisted',
+        currentUser,
+        `Email "${clean}" added to backend authorized whitelist for registration & sign-up.`
+      );
+      this.saveToDisk();
+    }
+  }
+
+  /**
+   * Removes an email address from the backend pre-authorized whitelist.
+   */
+  public removeAuthorizedBackendEmail(email: string, currentUser: string = 'admin'): void {
+    const clean = email.trim().toLowerCase();
+    const currentList = this.db.settings.backendAuthorizedEmails || [];
+    this.db.settings.backendAuthorizedEmails = currentList.filter(e => e.toLowerCase() !== clean);
+    this.logActivity(
+      'Backend Email Whitelist Removed',
+      currentUser,
+      `Email "${clean}" removed from backend authorized whitelist.`
+    );
+    this.saveToDisk();
+  }
+
+  /**
+   * Authenticates a user in offline mode using locally cached credentials.
+   */
+  public authenticateOffline(
+    identifier: string,
+    secret: string,
+    authMethod: 'password' | 'pin' = 'password'
+  ): {
+    success: boolean;
+    user?: UserAccount;
+    error?: string;
+  } {
+    const cleanId = identifier.trim().toLowerCase();
+    if (!cleanId) {
+      return { success: false, error: 'Please enter your Email or Username.' };
+    }
+
+    // 1. Check in-memory database first
+    let user = this.db.users.find(
+      u =>
+        (u.email && u.email.trim().toLowerCase() === cleanId) ||
+        u.username.trim().toLowerCase() === cleanId ||
+        u.name.trim().toLowerCase() === cleanId ||
+        u.id === identifier.trim()
+    );
+
+    // 2. Check offline localStorage cache if not found in memory
+    if (!user) {
+      try {
+        const cachedStr = localStorage.getItem(OFFLINE_CACHED_USERS_KEY);
+        if (cachedStr) {
+          const cachedList: UserAccount[] = JSON.parse(cachedStr);
+          const matchedCached = cachedList.find(
+            u =>
+              (u.email && u.email.trim().toLowerCase() === cleanId) ||
+              u.username.trim().toLowerCase() === cleanId ||
+              u.name.trim().toLowerCase() === cleanId
+          );
+          if (matchedCached) {
+            user = matchedCached;
+            // Restore to memory users
+            if (!this.db.users.some(u => u.id === matchedCached.id)) {
+              this.db.users.push(matchedCached);
+              this.saveToDisk();
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (!user) {
+      return {
+        success: false,
+        error:
+          'Account not found in offline records. If this account was recently created on Firebase, please sign in once while connected to internet to sync offline credentials.',
+      };
+    }
+
+    if (user.isBlocked || user.accountStatus === 'suspended') {
+      return {
+        success: false,
+        error: `Account "${user.name}" is currently blocked or suspended.`,
+      };
+    }
+
+    const hashed = simpleHash(secret);
+    if (authMethod === 'password') {
+      if (user.passwordHash && user.passwordHash !== hashed && user.pinCode !== secret) {
+        return { success: false, error: 'Incorrect password for offline access.' };
+      }
+    } else {
+      if (user.pinCode !== secret && user.passwordHash !== hashed) {
+        return { success: false, error: 'Incorrect security PIN for offline access.' };
+      }
+    }
+
+    // Automatically load user's business workspace
+    const targetBizId = user.businessId || this.getActiveBusinessId();
+    this.db.activeBusinessId = targetBizId;
+    const targetBiz = (this.db.businesses || []).find(b => b.id === targetBizId) || this.db.profile;
+    if (targetBiz) {
+      this.db.profile = targetBiz;
+    }
+    user.lastLoginAt = new Date().toISOString();
+    this.saveToDisk();
+
+    return {
+      success: true,
+      user,
+    };
+  }
+
+  /**
+   * Registers a pre-authorized user, storing their password hash and credentials for both online & offline access.
+   */
+  public registerAuthorizedUser(params: {
+    email: string;
+    name: string;
+    username: string;
+    password: string;
+    pinCode?: string;
+    businessId?: string;
+  }): { user: UserAccount; business: BusinessProfile } {
+    const emailLower = params.email.trim().toLowerCase();
+
+    if (!this.isEmailAuthorizedForSignUp(emailLower)) {
+      throw new Error(
+        `Registration Denied: Email "${emailLower}" is not pre-authorized in the backend. Contact your administrator to add your email to Firebase first.`
+      );
+    }
+
+    const existingUser = this.db.users.find(
+      u => u.email && u.email.trim().toLowerCase() === emailLower
+    );
+
+    const nowIso = new Date().toISOString();
+    const pin = params.pinCode?.trim() || '1234';
+    const pwdHash = simpleHash(params.password);
+
+    let targetBizId = params.businessId || this.getActiveBusinessId();
+    let targetBiz =
+      (this.db.businesses || []).find(b => b.id === targetBizId) ||
+      this.db.profile ||
+      DEFAULT_INITIAL_PROFILE;
+
+    if (existingUser) {
+      // User was pre-added by admin or Firebase; now set credentials and activate
+      existingUser.name = params.name.trim() || existingUser.name;
+      existingUser.username = params.username.trim() || existingUser.username;
+      existingUser.passwordHash = pwdHash;
+      existingUser.pinCode = pin;
+      existingUser.businessId = targetBiz.id;
+      existingUser.businessType = targetBiz.businessType;
+      existingUser.accountStatus = 'active';
+      existingUser.isActive = true;
+      existingUser.lastLoginAt = nowIso;
+
+      this.db.activeBusinessId = targetBiz.id;
+      this.db.profile = targetBiz;
+      this.saveToDisk();
+      this.cacheUsersForOffline();
+
+      return { user: existingUser, business: targetBiz };
+    }
+
+    const newUserId = `usr-reg-${Date.now()}`;
+    const newUser: UserAccount = {
+      id: newUserId,
+      businessId: targetBiz.id,
+      businessName: targetBiz.businessName,
+      businessType: targetBiz.businessType,
+      selectedBusinessMode: normalizeBusinessMode(targetBiz.businessType),
+      name: params.name.trim() || emailLower.split('@')[0],
+      username: params.username.trim() || emailLower.split('@')[0],
+      email: emailLower,
+      role: 'admin',
+      permissions: ['all', 'admin', 'create', 'edit', 'delete', 'view', 'export'],
+      allowedModules: [
+        'dashboard',
+        'production',
+        'products_catalog',
+        'stock',
+        'mill_purchases',
+        'sales',
+        'customers_suppliers',
+        'expenses_payments',
+        'returns',
+        'waste_recycle',
+        'history',
+        'pdf_center',
+        'settings',
+        'admin',
+        'profile',
+        'about',
+      ],
+      pinCode: pin,
+      passwordHash: pwdHash,
+      accountStatus: 'active',
+      isActive: true,
+      isBlocked: false,
+      createdAt: nowIso,
+      registeredAt: nowIso,
+      lastLoginAt: nowIso,
+    };
+
+    this.db.users.push(newUser);
+    this.db.activeBusinessId = targetBiz.id;
+    this.db.profile = targetBiz;
+
+    this.logActivity(
+      'Authorized User Registered',
+      newUser.name,
+      `Pre-authorized user "${newUser.email}" completed sign up and linked to "${targetBiz.businessName}".`
+    );
+    this.saveToDisk();
+    this.cacheUsersForOffline();
+
+    return { user: newUser, business: targetBiz };
+  }
+
+  /**
+   * Automatic background synchronization to cloud whenever internet is restored or periodically online.
+   */
+  public async performAutoOnlineSync(currentUser: string = 'auto-sync'): Promise<{ success: boolean; message: string }> {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return { success: false, message: 'Currently offline.' };
+    }
+
+    try {
+      const activeBizId = this.getActiveBusinessId();
+      // 1. Sync snapshot to Firestore backend
+      await syncBusinessSnapshotToFirestore(activeBizId, this.db);
+
+      // 2. If Google Drive is connected, also trigger Google Drive backup
+      if (this.db.settings.googleDriveConnected) {
+        await this.performCloudBackup(currentUser);
+      }
+
+      this.db.settings.hasUnsyncedChanges = false;
+      this.db.settings.lastOfflineSyncAt = new Date().toISOString();
+      this.saveToDisk();
+
+      return {
+        success: true,
+        message: 'Auto-sync completed. Local database updated to cloud backend.',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err?.message || 'Auto-sync encounter error.',
+      };
+    }
+  }
+
+  /**
    * Returns all registered users across all businesses for the Login screen account selector / lookup.
    */
   public getAllUsers(): UserAccount[] {
@@ -1469,6 +2044,13 @@ export class StorageService {
       createdAt: new Date().toISOString(),
     };
     this.db.users.push(newUser);
+    if (newUser.email && newUser.email.includes('@')) {
+      const emailLower = newUser.email.trim().toLowerCase();
+      const currentList = this.db.settings.backendAuthorizedEmails || [];
+      if (!currentList.includes(emailLower)) {
+        this.db.settings.backendAuthorizedEmails = [...currentList, emailLower];
+      }
+    }
     this.logActivity(
       'User Added',
       currentUser,

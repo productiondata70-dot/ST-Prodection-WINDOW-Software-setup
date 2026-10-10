@@ -66,31 +66,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
     key: ModuleKey;
     label: string;
     icon: React.ComponentType<{ className?: string }>;
+    colorClass: string;
+    gradientBg: string;
   }> = [
     {
       key: 'dashboard',
       label: language === 'en' ? modeConfig.moduleLabels.dashboard || t.dashboard : t.dashboard,
       icon: LayoutDashboard,
+      colorClass: 'text-blue-500',
+      gradientBg: 'bg-gradient-to-tr from-blue-600 to-indigo-600',
     },
     {
       key: 'production',
       label: t.production,
       icon: Factory,
+      colorClass: 'text-emerald-500',
+      gradientBg: 'bg-gradient-to-tr from-emerald-500 to-teal-600',
     },
     {
       key: 'sales',
       label: language === 'en' ? modeConfig.moduleLabels.sales || t.sales : t.sales,
       icon: ShoppingCart,
+      colorClass: 'text-violet-500',
+      gradientBg: 'bg-gradient-to-tr from-violet-600 to-purple-600',
     },
     {
       key: 'products_catalog',
       label: modeConfig.moduleLabels.products_catalog || 'Products Catalog',
       icon: Package,
+      colorClass: 'text-sky-500',
+      gradientBg: 'bg-gradient-to-tr from-sky-500 to-blue-600',
     },
     {
       key: 'stock',
       label: language === 'en' ? modeConfig.moduleLabels.stock || t.stock : t.stock,
       icon: Boxes,
+      colorClass: 'text-amber-500',
+      gradientBg: 'bg-gradient-to-tr from-amber-500 to-orange-600',
     },
     {
       key: 'mill_purchases',
@@ -99,51 +111,71 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ? modeConfig.moduleLabels.mill_purchases || (t as any).millPurchases || 'Purchases'
           : (t as any).millPurchases || 'Mill Purchases',
       icon: Truck,
+      colorClass: 'text-indigo-500',
+      gradientBg: 'bg-gradient-to-tr from-indigo-500 to-blue-600',
     },
     {
       key: 'customers_suppliers',
       label: modeConfig.moduleLabels.customers_suppliers || 'Customers & Suppliers',
       icon: Users,
+      colorClass: 'text-pink-500',
+      gradientBg: 'bg-gradient-to-tr from-pink-500 to-rose-600',
     },
     {
       key: 'expenses_payments',
       label: modeConfig.moduleLabels.expenses_payments || 'Expenses & Payments',
       icon: Wallet,
+      colorClass: 'text-rose-500',
+      gradientBg: 'bg-gradient-to-tr from-rose-500 to-red-600',
     },
     {
       key: 'returns',
       label: t.returns,
       icon: RotateCcw,
+      colorClass: 'text-orange-500',
+      gradientBg: 'bg-gradient-to-tr from-orange-500 to-amber-600',
     },
     {
       key: 'waste_recycle',
       label: t.wasteRecycle,
       icon: Trash2,
+      colorClass: 'text-slate-500',
+      gradientBg: 'bg-gradient-to-tr from-slate-600 to-slate-800',
     },
     {
       key: 'history',
       label: language === 'en' ? modeConfig.moduleLabels.history || t.history : t.history,
       icon: History,
+      colorClass: 'text-cyan-500',
+      gradientBg: 'bg-gradient-to-tr from-cyan-600 to-teal-600',
     },
     {
       key: 'pdf_center',
       label: language === 'en' ? modeConfig.moduleLabels.pdf_center || t.pdfCenter : t.pdfCenter,
       icon: FileText,
+      colorClass: 'text-red-500',
+      gradientBg: 'bg-gradient-to-tr from-red-500 to-pink-600',
     },
     {
       key: 'settings',
       label: t.settings,
       icon: Settings,
+      colorClass: 'text-teal-500',
+      gradientBg: 'bg-gradient-to-tr from-teal-500 to-emerald-600',
     },
     {
       key: 'admin',
       label: t.adminPanel,
       icon: ShieldAlert,
+      colorClass: 'text-amber-600',
+      gradientBg: 'bg-gradient-to-tr from-amber-600 to-red-600',
     },
     {
       key: 'about',
       label: t.about,
       icon: Info,
+      colorClass: 'text-blue-500',
+      gradientBg: 'bg-gradient-to-tr from-blue-500 to-cyan-500',
     },
   ];
 
@@ -194,20 +226,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </div>
           </div>
-
-          {onLogout && (
-            <div className="pt-1.5 border-t border-slate-100 dark:border-slate-700/60">
-              <button
-                type="button"
-                onClick={onLogout}
-                title="Securely log out of active session"
-                className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50/70 dark:bg-rose-950/40 hover:bg-rose-600 hover:text-white transition cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Logout (لاگ آؤٹ)</span>
-              </button>
-            </div>
-          )}
         </div>
 
         <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
@@ -218,29 +236,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
           const Icon = item.icon;
           const isActive = currentModule === item.key;
           const isProtected = protectedModules[item.key];
+          const isVivid = theme === 'vivid-pro';
+          const isDeskeraPlum = theme === 'deskera-plum';
+          const isDeskeraNavy = theme === 'deskera-navy';
+          const isDeskeraEmerald = theme === 'deskera-emerald';
+          const isDeskeraCrimson = theme === 'deskera-crimson';
+          const isDeskeraSlate = theme === 'deskera-slate';
+          const isDeskera = isDeskeraPlum || isDeskeraNavy || isDeskeraEmerald || isDeskeraCrimson || isDeskeraSlate;
 
           return (
             <button
               key={item.key}
               onClick={() => onSelectModule(item.key)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all group ${
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-all group ${
                 isActive
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                  ? isDeskeraPlum
+                    ? 'bg-white/15 text-white shadow-sm ring-1 ring-white/25'
+                    : isDeskeraNavy
+                    ? 'bg-blue-600/35 text-white shadow-sm ring-1 ring-blue-400/30'
+                    : isDeskeraEmerald
+                    ? 'bg-emerald-600/35 text-white shadow-sm ring-1 ring-emerald-400/30'
+                    : isDeskeraCrimson
+                    ? 'bg-rose-600/35 text-white shadow-sm ring-1 ring-rose-400/30'
+                    : isDeskeraSlate
+                    ? 'bg-white/15 text-white shadow-sm ring-1 ring-white/20'
+                    : isVivid
+                    ? `${item.gradientBg} text-white shadow-md shadow-blue-500/25`
+                    : 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                  : isDeskera
+                  ? 'text-white/75 hover:bg-white/10 hover:text-white'
+                  : isVivid
+                  ? 'text-slate-700 hover:bg-white hover:shadow-xs hover:text-slate-900'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <div className="flex items-center gap-3 truncate">
-                <Icon
-                  className={`w-4 h-4 shrink-0 transition-transform ${
-                    isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400 group-hover:scale-105'
+              <div className="flex items-center gap-2.5 truncate">
+                <div
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
+                    isActive
+                      ? 'bg-white/20 text-white shadow-2xs'
+                      : isDeskera
+                      ? 'bg-white/10 text-white shadow-2xs'
+                      : isVivid
+                      ? `${item.gradientBg} text-white shadow-2xs`
+                      : `bg-slate-100 dark:bg-slate-800 ${item.colorClass}`
                   }`}
-                />
+                >
+                  <Icon className="w-4 h-4" />
+                </div>
                 <span className="truncate">{item.label}</span>
               </div>
               {isProtected && (
                 <Lock
                   className={`w-3.5 h-3.5 shrink-0 ${
-                    isActive ? 'text-blue-200' : 'text-slate-400 dark:text-slate-500'
+                    isActive ? 'text-white/70' : 'text-slate-400 dark:text-slate-500'
                   }`}
                 />
               )}
@@ -294,10 +343,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <select
             value={theme}
             onChange={e => onThemeChange(e.target.value as AppTheme)}
-            className="text-xs bg-slate-200/60 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-md px-2 py-1 border-0 focus:ring-1 focus:ring-blue-500"
+            className="text-xs bg-slate-200/60 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-md px-2 py-1 border-0 focus:ring-1 focus:ring-blue-500 max-w-[130px] truncate"
           >
+            <option value="deskera-plum">Deskera Plum (تصویر والی تھیم)</option>
+            <option value="deskera-navy">Deskera Navy (نیوی بلیو)</option>
+            <option value="deskera-emerald">Deskera Emerald (ایمرلڈ)</option>
+            <option value="deskera-crimson">Deskera Crimson (برگنڈی)</option>
+            <option value="deskera-slate">Deskera Onyx (سلیٹ گریفائٹ)</option>
+            <option value="vivid-pro">Vivid Pro Colorful (فول کلر)</option>
+            <option value="ios-colorful">iOS Colorful</option>
             <option value="ios-light">iOS Light</option>
-            <option value="ios-colorful">iOS Colorful (New)</option>
             <option value="flourpro-light">FlourPro Light</option>
             <option value="midnight-dark">Midnight Dark</option>
             <option value="emerald-dark">Emerald Dark</option>

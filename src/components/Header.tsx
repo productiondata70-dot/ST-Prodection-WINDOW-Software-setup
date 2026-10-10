@@ -119,6 +119,19 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right: Actions, Sync, User, Notifications, Window Controls */}
       <div className="flex items-center gap-2">
+        {/* Live Online / Offline Network Badge */}
+        <div
+          title={typeof navigator !== 'undefined' && navigator.onLine ? 'Connected to Internet (Cloud Sync Active)' : 'Offline Mode (Local Storage Only)'}
+          className={`hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-semibold border ${
+            typeof navigator !== 'undefined' && navigator.onLine
+              ? 'bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+              : 'bg-amber-50/80 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+          }`}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${typeof navigator !== 'undefined' && navigator.onLine ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
+          <span className="text-[11px]">{typeof navigator !== 'undefined' && navigator.onLine ? 'Online' : 'Offline'}</span>
+        </div>
+
         {/* Cloud Sync Status Indicator */}
         <button
           onClick={onBackupNow}
