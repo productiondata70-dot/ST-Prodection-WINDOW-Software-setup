@@ -50,6 +50,9 @@ export default function App() {
   const [currentUserId, setCurrentUserId] = useState<string>(() => {
     return localStorage.getItem('st_active_user_id') || '';
   });
+  const [isMasterAdminMode, setIsMasterAdminMode] = useState<boolean>(() => {
+    return sessionStorage.getItem('st_master_admin_session') === 'true';
+  });
   const [authInitialTab, setAuthInitialTab] = useState<'login' | 'signup'>('login');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notificationDrawerTab, setNotificationDrawerTab] = useState<'notifications' | 'activity'>('notifications');
@@ -254,7 +257,7 @@ export default function App() {
     if (!currentUser) return;
     const activeBiz = storage.getActiveBusiness();
     const targetBizType = currentUser.businessType || activeBiz?.businessType || db.profile?.businessType;
-    if (!isModuleAllowedForBusinessType(currentModule, targetBizType)) {
+    if (currentModule === 'admin' || !isModuleAllowedForBusinessType(currentModule, targetBizType, activeBiz?.enabledModules)) {
       setCurrentModule('dashboard');
     }
   }, [currentUser?.businessType, db.profile?.businessType, currentModule]);
@@ -279,13 +282,15 @@ export default function App() {
 
     // Always land on an allowed module for the newly loaded business workspace
     if (
-      !isModuleAllowedForBusinessType(currentModule, targetBizType) ||
+      currentModule === 'admin' ||
+      !isModuleAllowedForBusinessType(currentModule, targetBizType, updatedBiz?.enabledModules) ||
       !storage.hasPermission(targetUser, currentModule)
     ) {
       const savedModule = localStorage.getItem('st_last_active_module') as ModuleKey;
       if (
         savedModule &&
-        isModuleAllowedForBusinessType(savedModule, targetBizType) &&
+        savedModule !== 'admin' &&
+        isModuleAllowedForBusinessType(savedModule, targetBizType, updatedBiz?.enabledModules) &&
         storage.hasPermission(targetUser, savedModule)
       ) {
         setCurrentModule(savedModule);
@@ -324,9 +329,12 @@ export default function App() {
 
   // Select Module with RBAC Permission Check & PIN Guard Check
   const handleSelectModule = (mod: ModuleKey) => {
+    if (mod === 'admin') {
+      return;
+    }
     const activeBiz = storage.getActiveBusiness();
     const targetBizType = currentUser?.businessType || activeBiz?.businessType || db.profile?.businessType;
-    if (!isModuleAllowedForBusinessType(mod, targetBizType)) {
+    if (!isModuleAllowedForBusinessType(mod, targetBizType, activeBiz?.enabledModules)) {
       return;
     }
 
@@ -374,25 +382,47 @@ export default function App() {
     );
   }
 
+  // Dedicated Master Admin Portal Mode (Requirement 2 & 3: separate from regular business interface)
+  if (isMasterAdminMode) {
+    return (
+      <AdminPanelView
+        db={db}
+        storage={storage}
+        currentUser="Master Administrator"
+        onRequestPinAuth={handleProtectedAction}
+        language={db.settings.language}
+        onExitAdmin={() => {
+          sessionStorage.removeItem('st_master_admin_session');
+          setIsMasterAdminMode(false);
+          setIsAuthenticated(false);
+        }}
+      />
+    );
+  }
+
   // If unauthenticated or active user session is not found, strictly require login
   if (!isAuthenticated || !currentUser) {
     return (
       <LoginView
         db={db}
-        initialMode="login"
         onLoginSuccess={user => {
           activateUserAndWorkspace(user);
           const savedModule = localStorage.getItem('st_last_active_module') as ModuleKey;
           const targetBizType = user.businessType || db.profile?.businessType || 'flour_mill';
           if (
             savedModule &&
-            isModuleAllowedForBusinessType(savedModule, targetBizType) &&
+            savedModule !== 'admin' &&
+            isModuleAllowedForBusinessType(savedModule, targetBizType, db.profile?.enabledModules) &&
             storage.hasPermission(user, savedModule)
           ) {
             setCurrentModule(savedModule);
           } else {
             setCurrentModule('dashboard');
           }
+        }}
+        onMasterAdminLogin={() => {
+          sessionStorage.setItem('st_master_admin_session', 'true');
+          setIsMasterAdminMode(true);
         }}
       />
     );
@@ -481,17 +511,29 @@ export default function App() {
             )}
 
             {currentModule === 'production' &&
-              isModuleAllowedForBusinessType('production', db.profile?.businessType) && (
+              isModuleAllowedForBusinessType('production', db.profile?.businessType, db.profile?.enabledModules) && (
                 <ProductionView
                   db={db}
                   storage={storage}
                   currentUser={currentUser ? currentUser.name : 'Operator'}
                   language={db.settings.language}
+                  initialTab="entry"
+                />
+              )}
+
+            {currentModule === 'daily_production' &&
+              isModuleAllowedForBusinessType('daily_production', db.profile?.businessType, db.profile?.enabledModules) && (
+                <ProductionView
+                  db={db}
+                  storage={storage}
+                  currentUser={currentUser ? currentUser.name : 'Operator'}
+                  language={db.settings.language}
+                  initialTab="daily"
                 />
               )}
 
             {currentModule === 'products_catalog' &&
-              isModuleAllowedForBusinessType('products_catalog', db.profile?.businessType) && (
+              isModuleAllowedForBusinessType('products_catalog', db.profile?.businessType, db.profile?.enabledModules) && (
                 <ProductsCatalogView
                   db={db}
                   currentUser={currentUser || db.users[0]}
@@ -499,39 +541,42 @@ export default function App() {
                 />
               )}
 
-            {currentModule === 'stock' && (
-              <StockView
-                db={db}
-                storage={storage}
-                currentUser={currentUser ? currentUser.name : 'Admin'}
-                onNavigateToSalesWithDraft={handleTransferToSales}
-                onNavigateToPdf={() => setCurrentModule('pdf_center')}
-                language={db.settings.language}
-              />
-            )}
+            {currentModule === 'stock' &&
+              isModuleAllowedForBusinessType('stock', db.profile?.businessType, db.profile?.enabledModules) && (
+                <StockView
+                  db={db}
+                  storage={storage}
+                  currentUser={currentUser ? currentUser.name : 'Admin'}
+                  onNavigateToSalesWithDraft={handleTransferToSales}
+                  onNavigateToPdf={() => setCurrentModule('pdf_center')}
+                  language={db.settings.language}
+                />
+              )}
 
-            {currentModule === 'mill_purchases' && (
-              <MillPurchasesView
-                db={db}
-                storage={storage}
-                currentUser={currentUser ? currentUser.name : 'Admin'}
-                language={db.settings.language}
-              />
-            )}
+            {currentModule === 'mill_purchases' &&
+              isModuleAllowedForBusinessType('mill_purchases', db.profile?.businessType, db.profile?.enabledModules) && (
+                <MillPurchasesView
+                  db={db}
+                  storage={storage}
+                  currentUser={currentUser ? currentUser.name : 'Admin'}
+                  language={db.settings.language}
+                />
+              )}
 
-            {currentModule === 'sales' && (
-              <SalesView
-                db={db}
-                storage={storage}
-                currentUser={currentUser ? currentUser.name : 'Clerk'}
-                initialDraftItem={salesDraftItem}
-                onClearDraft={() => setSalesDraftItem(null)}
-                language={db.settings.language}
-              />
-            )}
+            {currentModule === 'sales' &&
+              isModuleAllowedForBusinessType('sales', db.profile?.businessType, db.profile?.enabledModules) && (
+                <SalesView
+                  db={db}
+                  storage={storage}
+                  currentUser={currentUser ? currentUser.name : 'Clerk'}
+                  initialDraftItem={salesDraftItem}
+                  onClearDraft={() => setSalesDraftItem(null)}
+                  language={db.settings.language}
+                />
+              )}
 
             {currentModule === 'customers_suppliers' &&
-              isModuleAllowedForBusinessType('customers_suppliers', db.profile?.businessType) && (
+              isModuleAllowedForBusinessType('customers_suppliers', db.profile?.businessType, db.profile?.enabledModules) && (
                 <CustomersSuppliersView
                   db={db}
                   currentUser={currentUser || db.users[0]}
@@ -540,7 +585,7 @@ export default function App() {
               )}
 
             {currentModule === 'expenses_payments' &&
-              isModuleAllowedForBusinessType('expenses_payments', db.profile?.businessType) && (
+              isModuleAllowedForBusinessType('expenses_payments', db.profile?.businessType, db.profile?.enabledModules) && (
                 <ExpensesPaymentsView
                   db={db}
                   currentUser={currentUser || db.users[0]}
@@ -548,17 +593,18 @@ export default function App() {
                 />
               )}
 
-            {currentModule === 'returns' && (
-              <ReturnsView
-                db={db}
-                storage={storage}
-                currentUser={currentUser ? currentUser.name : 'Admin'}
-                language={db.settings.language}
-              />
-            )}
+            {currentModule === 'returns' &&
+              isModuleAllowedForBusinessType('returns', db.profile?.businessType, db.profile?.enabledModules) && (
+                <ReturnsView
+                  db={db}
+                  storage={storage}
+                  currentUser={currentUser ? currentUser.name : 'Admin'}
+                  language={db.settings.language}
+                />
+              )}
 
             {currentModule === 'waste_recycle' &&
-              isModuleAllowedForBusinessType('waste_recycle', db.profile?.businessType) && (
+              isModuleAllowedForBusinessType('waste_recycle', db.profile?.businessType, db.profile?.enabledModules) && (
                 <WasteRecycleView
                   db={db}
                   storage={storage}
@@ -568,45 +614,38 @@ export default function App() {
                 />
               )}
 
-            {currentModule === 'history' && (
-              <HistoryView
-                db={db}
-                storage={storage}
-                currentUser={currentUser ? currentUser.name : 'Admin'}
-                language={db.settings.language}
-              />
-            )}
+            {currentModule === 'history' &&
+              isModuleAllowedForBusinessType('history', db.profile?.businessType, db.profile?.enabledModules) && (
+                <HistoryView
+                  db={db}
+                  storage={storage}
+                  currentUser={currentUser ? currentUser.name : 'Admin'}
+                  language={db.settings.language}
+                />
+              )}
 
-            {currentModule === 'pdf_center' && (
-              <PdfCenterView db={db} language={db.settings.language} />
-            )}
+            {currentModule === 'pdf_center' &&
+              isModuleAllowedForBusinessType('pdf_center', db.profile?.businessType, db.profile?.enabledModules) && (
+                <PdfCenterView db={db} language={db.settings.language} />
+              )}
 
-            {currentModule === 'settings' && (
-              <SettingsView
-                db={db}
-                storage={storage}
-                currentUser={currentUser ? currentUser.name : 'Admin'}
-                onRequestPinAuth={handleProtectedAction}
-                language={db.settings.language}
-                onLanguageChange={lang =>
-                  storage.updateSettings({ language: lang }, currentUser?.name || 'Admin')
-                }
-                theme={db.settings.theme}
-                onThemeChange={th =>
-                  storage.updateSettings({ theme: th }, currentUser?.name || 'Admin')
-                }
-              />
-            )}
-
-            {currentModule === 'admin' && (
-              <AdminPanelView
-                db={db}
-                storage={storage}
-                currentUser={currentUser ? currentUser.name : 'Admin'}
-                onRequestPinAuth={handleProtectedAction}
-                language={db.settings.language}
-              />
-            )}
+            {currentModule === 'settings' &&
+              isModuleAllowedForBusinessType('settings', db.profile?.businessType, db.profile?.enabledModules) && (
+                <SettingsView
+                  db={db}
+                  storage={storage}
+                  currentUser={currentUser ? currentUser.name : 'Admin'}
+                  onRequestPinAuth={handleProtectedAction}
+                  language={db.settings.language}
+                  onLanguageChange={lang =>
+                    storage.updateSettings({ language: lang }, currentUser?.name || 'Admin')
+                  }
+                  theme={db.settings.theme}
+                  onThemeChange={th =>
+                    storage.updateSettings({ theme: th }, currentUser?.name || 'Admin')
+                  }
+                />
+              )}
 
             {currentModule === 'about' && (
               <AboutView db={db} language={db.settings.language} />

@@ -2,6 +2,7 @@ import React from 'react';
 import {
   LayoutDashboard,
   Factory,
+  Calendar,
   Boxes,
   ShoppingCart,
   RotateCcw,
@@ -84,6 +85,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       gradientBg: 'bg-gradient-to-tr from-emerald-500 to-teal-600',
     },
     {
+      key: 'daily_production',
+      label: language === 'en' ? 'Daily Production' : 'روزانہ پروڈکشن',
+      icon: Calendar,
+      colorClass: 'text-sky-500',
+      gradientBg: 'bg-gradient-to-tr from-sky-500 to-blue-600',
+    },
+    {
       key: 'sales',
       label: language === 'en' ? modeConfig.moduleLabels.sales || t.sales : t.sales,
       icon: ShoppingCart,
@@ -164,13 +172,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       gradientBg: 'bg-gradient-to-tr from-teal-500 to-emerald-600',
     },
     {
-      key: 'admin',
-      label: t.adminPanel,
-      icon: ShieldAlert,
-      colorClass: 'text-amber-600',
-      gradientBg: 'bg-gradient-to-tr from-amber-600 to-red-600',
-    },
-    {
       key: 'about',
       label: t.about,
       icon: Info,
@@ -179,9 +180,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
-  // RBAC + Business Mode Filter: Only show modules permitted for active Business Mode AND current user's role
+  // RBAC + Business Mode Filter: Only show modules permitted for active Business Mode (or explicit business enabledModules) AND current user's role
   const visibleNavItems = navItems.filter(item => {
-    if (!isModuleAllowedForBusinessType(item.key, businessType)) return false;
+    if (!isModuleAllowedForBusinessType(item.key, businessType, activeBiz?.enabledModules)) return false;
     if (!currentUser || !storage) return true;
     return storage.hasPermission(currentUser, item.key);
   });

@@ -30,6 +30,7 @@ import {
   CustomRole,
   ModuleKey,
   GranularAction,
+  MasterAdminConfig,
 } from '../types';
 import {
   normalizeBusinessMode,
@@ -95,6 +96,25 @@ export const DEFAULT_ADMIN_USER: UserAccount = {
   lastLoginAt: new Date().toISOString(),
 };
 
+export function hashCredential(input: string): string {
+  let hash1 = 0x811c9dc5;
+  let hash2 = 0x9e3779b9;
+  const salted = `__st_sec_v3__${input}__st_enterprise__`;
+  for (let i = 0; i < salted.length; i++) {
+    const char = salted.charCodeAt(i);
+    hash1 = Math.imul(hash1 ^ char, 0x01000193);
+    hash2 = Math.imul(hash2 ^ (char << (i % 8)), 0x27d4eb2d);
+  }
+  return 'sh256_' + Math.abs(hash1).toString(16).padStart(8, '0') + Math.abs(hash2).toString(16).padStart(8, '0');
+}
+
+export const INITIAL_MASTER_ADMIN: MasterAdminConfig = {
+  username: 'TanzeelSt',
+  passwordHash: hashCredential('Tanzeel56'),
+  securityPinHash: hashCredential('5683'),
+  updatedAt: new Date().toISOString(),
+};
+
 export const INITIAL_SETTINGS: AppSettings = {
   isSetupComplete: true,
   theme: 'ios-colorful',
@@ -104,11 +124,15 @@ export const INITIAL_SETTINGS: AppSettings = {
   productionAutoPostToStock: true,
   allowNegativeInventory: false,
   saleInvoicePriceMode: 'unlocked',
-  allowSignUp: true,
-  hideSignUpWhenDisabled: false,
+  allowSignUp: false,
+  allowOpenSignUp: false,
+  hideSignUpWhenDisabled: true,
   allowedSignUpBusinessModes: ['factory', 'mill', 'shopping_mart', 'small_business'],
   backendAuthorizedEmails: ['productiondata70@gmail.com', 'admin@stproduction.com'],
   offlineSyncQueue: [],
+  masterAdmin: INITIAL_MASTER_ADMIN,
+  businessModeEnabled: true,
+  multipleWorkspacesEnabled: true,
   profileEditPasswordHash: simpleHash('Admin@Profile2025'),
   profileEditPinHash: simpleHash('7890'),
   profileEditFailedAttempts: 0,
@@ -921,6 +945,21 @@ export class StorageService {
     return serialized;
   }
 
+  public serializeDatabase(): string {
+    return this.exportSerializedDatabase();
+  }
+
+  public importDatabase(rawJson: string, currentUser: string): boolean {
+    const parsed = this.parseAndNormalizeDatabase(rawJson);
+    if (!parsed) {
+      throw new Error('Invalid database format. Unable to restore.');
+    }
+    this.db = parsed;
+    this.saveToDisk();
+    this.logActivity('Database Restored', currentUser, 'Database successfully restored from JSON file.');
+    return true;
+  }
+
   public saveToDisk(): void {
     try {
       this.db.settings.hasUnsyncedChanges = true;
@@ -1006,10 +1045,10 @@ export class StorageService {
       );
     }
 
-    if (activeBiz && !isModuleAllowedForBusinessType(module, activeBiz.businessType)) {
+    if (activeBiz && !isModuleAllowedForBusinessType(module, activeBiz.businessType, activeBiz.enabledModules)) {
       const modeConfig = getBusinessModeConfig(activeBiz.businessType);
       throw new Error(
-        `Access Denied: The "${module}" module is not available or permitted in ${modeConfig.labelEn}.`
+        `Access Denied: The "${module}" module is not available or permitted for ${activeBiz.businessName || modeConfig.labelEn}.`
       );
     }
 
@@ -1054,7 +1093,7 @@ export class StorageService {
     const factoryDefaultProdIds = new Set(['prod-1', 'prod-2', 'prod-3', 'prod-4', 'prod-5']);
     const isAllowedProductForActiveWorkspace = (p: Product): boolean => {
       if (!match(p.businessId)) return false;
-      if (activeMode !== 'factory') {
+      if (activeMode !== 'factory' && activeMode !== 'mill') {
         if (factoryDefaultProdIds.has(p.id)) {
           return false;
         }
@@ -1099,6 +1138,12 @@ export class StorageService {
       }
     }
 
+    const hasProductionAccess =
+      activeMode === 'factory' ||
+      activeMode === 'mill' ||
+      activeProfile?.enabledModules?.includes('production') ||
+      activeProfile?.enabledModules?.includes('daily_production');
+
     return {
       ...this.db,
       profile: activeProfile,
@@ -1106,10 +1151,9 @@ export class StorageService {
       businesses: this.getAllBusinesses(),
       users: this.db.users.filter(u => match(u.businessId)),
       products: workspaceProducts,
-      productionSessions:
-        (activeMode === 'factory' || activeMode === 'mill')
-          ? this.db.productionSessions.filter(s => match(s.businessId))
-          : [],
+      productionSessions: hasProductionAccess
+        ? this.db.productionSessions.filter(s => match(s.businessId))
+        : [],
       stockBalances: syncedStockBalances,
       stockMovements: this.db.stockMovements.filter(
         m => match(m.businessId) && ((activeMode === 'factory' || activeMode === 'mill') || workspaceProductIds.has(m.productId))
@@ -1831,10 +1875,18 @@ export class StorageService {
       };
     }
 
-    if (user.isBlocked || user.accountStatus === 'suspended') {
+    if (user.isBlocked || user.accountStatus === 'suspended' || user.accountStatus === 'disabled') {
       return {
         success: false,
-        error: `Account "${user.name}" is currently blocked or suspended.`,
+        error: `Account "${user.name}" is currently locked or inactive. Please contact the Master Administrator.`,
+      };
+    }
+
+    const userBiz = (this.db.businesses || []).find(b => b.id === user.businessId);
+    if (userBiz && (userBiz.accountStatus === 'suspended' || userBiz.accountStatus === 'expired')) {
+      return {
+        success: false,
+        error: `Business account "${userBiz.businessName}" is currently locked or inactive. Please contact the Master Administrator.`,
       };
     }
 
@@ -2417,7 +2469,11 @@ export class StorageService {
     currentUser: string,
     postToStock?: boolean
   ): ProductionSession {
-    this.assertModuleAccess('production', 'create', currentUser);
+    try {
+      this.assertModuleAccess('production', 'create', currentUser);
+    } catch {
+      this.assertModuleAccess('daily_production', 'create', currentUser);
+    }
     const activeBizId = this.getActiveBusinessId();
 
     if (!session.lines || session.lines.length === 0) {
@@ -4977,9 +5033,9 @@ export class StorageService {
   ): boolean {
     if (!user) return false;
 
-    // Enforce business-mode module restrictions for all users
+    // Enforce business-mode / business-assigned module restrictions for all users
     const activeBiz = this.getActiveBusiness();
-    if (activeBiz && !isModuleAllowedForBusinessType(module, activeBiz.businessType)) {
+    if (activeBiz && !isModuleAllowedForBusinessType(module, activeBiz.businessType, activeBiz.enabledModules)) {
       return false;
     }
 
@@ -5410,6 +5466,434 @@ export class StorageService {
     this.assertModuleAccess('expenses_payments', 'delete', currentUser, pay.businessId);
     this.db.payments.splice(idx, 1);
     this.logActivity('Payment Deleted', currentUser, `Deleted payment record ${pay.paymentNo} (${pay.partyName})`);
+    this.saveToDisk();
+  }
+
+  // ==========================================
+  // MASTER ADMINISTRATOR & BUSINESS MANAGEMENT
+  // ==========================================
+
+  public getMasterAdminConfig(): MasterAdminConfig {
+    if (!this.db.settings.masterAdmin || !this.db.settings.masterAdmin.username) {
+      this.db.settings.masterAdmin = { ...INITIAL_MASTER_ADMIN };
+    }
+    return this.db.settings.masterAdmin;
+  }
+
+  public verifyMasterAdmin(username: string, password: string): { success: boolean; error?: string } {
+    const cfg = this.getMasterAdminConfig();
+    const cleanUser = String(username || '').trim();
+    if (!cleanUser) {
+      return { success: false, error: 'Please enter Administrator username.' };
+    }
+    if (cleanUser.toLowerCase() !== cfg.username.toLowerCase()) {
+      return { success: false, error: 'Invalid Administrator username. Access denied.' };
+    }
+    const hashed = hashCredential(password);
+    if (hashed !== cfg.passwordHash) {
+      return { success: false, error: 'Invalid Administrator password. Access denied.' };
+    }
+    return { success: true };
+  }
+
+  public verifyMasterSecurityPin(pin: string): boolean {
+    const cfg = this.getMasterAdminConfig();
+    const cleanPin = String(pin || '').trim();
+    if (!cleanPin) return false;
+    return hashCredential(cleanPin) === cfg.securityPinHash;
+  }
+
+  public updateMasterAdminCredentials(payload: {
+    currentPassword?: string;
+    currentPin?: string;
+    newUsername?: string;
+    newPassword?: string;
+    newPin?: string;
+  }): { success: boolean; error?: string } {
+    const cfg = this.getMasterAdminConfig();
+
+    // Verify current credentials
+    let isAuthorized = false;
+    if (payload.currentPassword && hashCredential(payload.currentPassword) === cfg.passwordHash) {
+      isAuthorized = true;
+    } else if (payload.currentPin && hashCredential(payload.currentPin) === cfg.securityPinHash) {
+      isAuthorized = true;
+    }
+
+    if (!isAuthorized) {
+      return { success: false, error: 'Authorization failed: Current password or Master Security PIN is incorrect.' };
+    }
+
+    const nextUsername = payload.newUsername?.trim() || cfg.username;
+    if (nextUsername.length < 3) {
+      return { success: false, error: 'Username must be at least 3 characters long.' };
+    }
+
+    let nextPasswordHash = cfg.passwordHash;
+    if (payload.newPassword && payload.newPassword.trim()) {
+      if (payload.newPassword.trim().length < 4) {
+        return { success: false, error: 'New password must be at least 4 characters long.' };
+      }
+      nextPasswordHash = hashCredential(payload.newPassword.trim());
+    }
+
+    let nextPinHash = cfg.securityPinHash;
+    if (payload.newPin && payload.newPin.trim()) {
+      if (payload.newPin.trim().length < 4) {
+        return { success: false, error: 'Master Security PIN must be at least 4 digits.' };
+      }
+      nextPinHash = hashCredential(payload.newPin.trim());
+    }
+
+    this.db.settings.masterAdmin = {
+      username: nextUsername,
+      passwordHash: nextPasswordHash,
+      securityPinHash: nextPinHash,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.logActivity('Master Admin Credentials Changed', 'Master Administrator', `Master Admin profile updated: username=${nextUsername}`);
+    this.saveToDisk();
+    return { success: true };
+  }
+
+  public registerBusinessByMasterAdmin(data: {
+    businessName: string;
+    ownerName: string;
+    username: string;
+    password: string;
+    pin?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    businessCategory: string;
+    allowedModules: ModuleKey[];
+    accountStatus?: 'active' | 'locked';
+    logoUrl?: string;
+    notes?: string;
+  }): { success: boolean; business: BusinessProfile; user: UserAccount; error?: string } {
+    const cleanBizName = data.businessName.trim();
+    const cleanOwnerName = data.ownerName.trim();
+    const cleanUsername = data.username.trim();
+    const cleanPassword = data.password.trim();
+
+    if (!cleanBizName) throw new Error('Business name is required.');
+    if (!cleanOwnerName) throw new Error('Owner or User name is required.');
+    if (!cleanUsername) throw new Error('Unique login username is required.');
+    if (!cleanPassword || cleanPassword.length < 3) throw new Error('Password must be at least 3 characters.');
+
+    // Check unique username across existing users
+    const userExists = this.db.users.some(u => u.username.toLowerCase() === cleanUsername.toLowerCase());
+    if (userExists) {
+      throw new Error(`Username "${cleanUsername}" is already taken. Please choose another username.`);
+    }
+
+    const newBizId = `biz-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const category = data.businessCategory || 'flour_mill';
+
+    const newProfile: BusinessProfile = {
+      id: newBizId,
+      businessName: cleanBizName,
+      businessType: category,
+      address: data.address?.trim() || '',
+      contactNumber: data.phone?.trim() || '',
+      email: data.email?.trim() || '',
+      plantSupervisor: '',
+      factoryManager: '',
+      ownerName: cleanOwnerName,
+      registrationNumber: `REG-${Date.now().toString().slice(-6)}`,
+      currency: 'PKR',
+      notes: data.notes?.trim() || `Business registered via Master Admin Panel on ${new Date().toLocaleDateString()}`,
+      accountStatus: data.accountStatus === 'locked' ? 'suspended' : 'active',
+      planType: 'enterprise',
+      invoicePrefix: cleanBizName.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, 'INV') || 'INV',
+      receiptPrintMode: 'a4',
+      enabledModules: data.allowedModules && data.allowedModules.length > 0 ? data.allowedModules : ['dashboard', 'sales', 'stock'],
+      logoUrl: data.logoUrl,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const newUser: UserAccount = {
+      id: `usr-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      businessId: newBizId,
+      businessName: cleanBizName,
+      businessType: category,
+      selectedBusinessMode: normalizeBusinessMode(category),
+      name: cleanOwnerName,
+      username: cleanUsername,
+      email: data.email?.trim() || '',
+      phone: data.phone?.trim() || '',
+      address: data.address?.trim() || '',
+      role: 'admin',
+      permissions: ['all', 'admin', 'create', 'edit', 'delete', 'view', 'export'],
+      allowedModules: newProfile.enabledModules,
+      pinCode: data.pin?.trim() || '1234',
+      passwordHash: simpleHash(cleanPassword),
+      accountStatus: data.accountStatus === 'locked' ? 'disabled' : 'active',
+      isActive: data.accountStatus !== 'locked',
+      isBlocked: data.accountStatus === 'locked',
+      createdAt: new Date().toISOString(),
+      registeredAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString(),
+    };
+
+    if (!this.db.businesses) this.db.businesses = [];
+    this.db.businesses.push(newProfile);
+    this.db.users.push(newUser);
+
+    // Seed default category items or products if relevant
+    const normMode = normalizeBusinessMode(category);
+    if (normMode === 'mill' || normMode === 'factory') {
+      const defaultProd: Product = {
+        id: `prod-${Date.now()}-1`,
+        businessId: newBizId,
+        nameEn: 'Standard Wheat Flour (Aata)',
+        nameUr: 'آٹا سپیشل',
+        category: 'Atta / Flour',
+        type: 'Manufactured Product',
+        bagSizes: [20, 25, 50, 80],
+        sku: `SKU-${cleanBizName.slice(0, 3).toUpperCase()}-01`,
+        unit: 'Bag',
+        rate: 3200,
+        minStockLevel: 25,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+      this.db.products.push(defaultProd);
+    } else {
+      const defaultProd: Product = {
+        id: `prod-${Date.now()}-1`,
+        businessId: newBizId,
+        nameEn: 'Sample Retail Product',
+        nameUr: 'پروڈکٹ',
+        category: 'General Items',
+        type: 'Retail Product',
+        bagSizes: [1],
+        sku: `SKU-${cleanBizName.slice(0, 3).toUpperCase()}-01`,
+        unit: 'Piece',
+        rate: 500,
+        minStockLevel: 10,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+      this.db.products.push(defaultProd);
+    }
+
+    this.logActivity(
+      'New Business Created',
+      'Master Administrator',
+      `Registered business "${cleanBizName}" (${category}) with user "${cleanUsername}"`
+    );
+    this.saveToDisk();
+
+    return { success: true, business: newProfile, user: newUser };
+  }
+
+  public updateBusinessByMasterAdmin(
+    businessId: string,
+    updates: Partial<BusinessProfile>,
+    allowedModules?: ModuleKey[]
+  ): BusinessProfile {
+    const biz = (this.db.businesses || []).find(b => b.id === businessId);
+    if (!biz) throw new Error('Business account not found.');
+
+    Object.assign(biz, updates);
+    if (allowedModules) {
+      biz.enabledModules = allowedModules;
+    }
+    biz.updatedAt = new Date().toISOString();
+
+    // Synchronize linked users
+    for (const u of this.db.users) {
+      if (u.businessId === businessId) {
+        if (updates.businessName) u.businessName = updates.businessName;
+        if (updates.businessType) {
+          u.businessType = updates.businessType;
+          u.selectedBusinessMode = normalizeBusinessMode(updates.businessType);
+        }
+        if (allowedModules) {
+          u.allowedModules = allowedModules;
+        }
+        if (updates.accountStatus) {
+          u.isActive = updates.accountStatus === 'active';
+          u.isBlocked = updates.accountStatus !== 'active';
+        }
+      }
+    }
+
+    this.logActivity('Business Updated', 'Master Administrator', `Updated business profile for "${biz.businessName}".`);
+    this.saveToDisk();
+    return biz;
+  }
+
+  public setBusinessAccountStatus(businessId: string, status: 'active' | 'locked'): void {
+    const biz = (this.db.businesses || []).find(b => b.id === businessId);
+    if (!biz) throw new Error('Business account not found.');
+
+    biz.accountStatus = status === 'locked' ? 'suspended' : 'active';
+    biz.updatedAt = new Date().toISOString();
+
+    for (const u of this.db.users) {
+      if (u.businessId === businessId) {
+        u.isBlocked = status === 'locked';
+        u.isActive = status === 'active';
+        u.accountStatus = status === 'locked' ? 'disabled' : 'active';
+      }
+    }
+
+    this.logActivity(
+      status === 'locked' ? 'Business Account Locked' : 'Business Account Unlocked',
+      'Master Administrator',
+      `Account for "${biz.businessName}" set to ${status}.`
+    );
+    this.saveToDisk();
+  }
+
+  public resetBusinessUserPassword(userId: string, newPassword: string): void {
+    const user = this.db.users.find(u => u.id === userId);
+    if (!user) throw new Error('User account not found.');
+    if (!newPassword || newPassword.trim().length < 3) {
+      throw new Error('New password must be at least 3 characters.');
+    }
+
+    user.passwordHash = simpleHash(newPassword.trim());
+    this.logActivity('Password Reset', 'Master Administrator', `Reset password for user "${user.name}" (${user.username}).`);
+    this.saveToDisk();
+  }
+
+  public updateBusinessModules(businessId: string, allowedModules: ModuleKey[]): void {
+    const biz = (this.db.businesses || []).find(b => b.id === businessId);
+    if (!biz) throw new Error('Business account not found.');
+
+    biz.enabledModules = allowedModules;
+    biz.updatedAt = new Date().toISOString();
+
+    for (const u of this.db.users) {
+      if (u.businessId === businessId) {
+        u.allowedModules = allowedModules;
+      }
+    }
+
+    this.logActivity(
+      'Business Permissions Updated',
+      'Master Administrator',
+      `Updated module permissions for "${biz.businessName}" (${allowedModules.length} modules enabled).`
+    );
+    this.saveToDisk();
+  }
+
+  public seedDefaultProductsForBusiness(businessId: string): void {
+    const biz = this.getAllBusinesses().find(b => b.id === businessId) || this.getActiveBusiness();
+    const mode = normalizeBusinessMode(biz?.businessType);
+    const bizPrefix = (biz?.businessName || 'BIZ').slice(0, 3).toUpperCase().replace(/[^A-Z]/g, 'PRD') || 'PRD';
+    const now = new Date().toISOString();
+
+    if (mode === 'mill' || mode === 'factory') {
+      const prods: Product[] = [
+        {
+          id: `prod-${Date.now()}-1`,
+          businessId,
+          nameEn: 'Special Wheat Flour (Atta)',
+          nameUr: 'آٹا سپیشل',
+          category: 'Atta / Flour',
+          type: 'Manufactured Product',
+          bagSizes: [20, 25, 50, 80],
+          sku: `SKU-${bizPrefix}-01`,
+          unit: 'Bag',
+          rate: 3200,
+          minStockLevel: 25,
+          isActive: true,
+          createdAt: now,
+        },
+        {
+          id: `prod-${Date.now()}-2`,
+          businessId,
+          nameEn: 'Super Fine Maida',
+          nameUr: 'میدہ فائن',
+          category: 'Maida',
+          type: 'Manufactured Product',
+          bagSizes: [20, 50, 80],
+          sku: `SKU-${bizPrefix}-02`,
+          unit: 'Bag',
+          rate: 3600,
+          minStockLevel: 20,
+          isActive: true,
+          createdAt: now,
+        },
+        {
+          id: `prod-${Date.now()}-3`,
+          businessId,
+          nameEn: 'Pure Suji (Semolina)',
+          nameUr: 'سوجی خالص',
+          category: 'Suji',
+          type: 'Manufactured Product',
+          bagSizes: [20, 50],
+          sku: `SKU-${bizPrefix}-03`,
+          unit: 'Bag',
+          rate: 3700,
+          minStockLevel: 15,
+          isActive: true,
+          createdAt: now,
+        },
+        {
+          id: `prod-${Date.now()}-4`,
+          businessId,
+          nameEn: 'Wheat Bran (Chokar)',
+          nameUr: 'چوکر گندم',
+          category: 'Bran',
+          type: 'Manufactured Product',
+          bagSizes: [20, 25, 35, 40],
+          sku: `SKU-${bizPrefix}-04`,
+          unit: 'Bag',
+          rate: 1850,
+          minStockLevel: 30,
+          isActive: true,
+          createdAt: now,
+        },
+      ];
+      this.db.products.push(...prods);
+    } else {
+      const prods: Product[] = [
+        {
+          id: `prod-${Date.now()}-1`,
+          businessId,
+          nameEn: 'General Retail Item 1',
+          nameUr: 'پروڈکٹ ۱',
+          category: 'General Items',
+          type: 'Retail Product',
+          bagSizes: [1],
+          sku: `SKU-${bizPrefix}-01`,
+          unit: 'Piece',
+          rate: 500,
+          minStockLevel: 10,
+          isActive: true,
+          createdAt: now,
+        },
+      ];
+      this.db.products.push(...prods);
+    }
+    this.saveToDisk();
+  }
+
+  public deleteBusinessByMasterAdmin(businessId: string): void {
+    if (businessId === DEFAULT_FACTORY_BUSINESS_ID) {
+      throw new Error('The primary default business workspace cannot be completely deleted.');
+    }
+    const idx = (this.db.businesses || []).findIndex(b => b.id === businessId);
+    if (idx === -1) throw new Error('Business account not found.');
+
+    const biz = this.db.businesses![idx];
+    this.db.businesses!.splice(idx, 1);
+
+    // Remove users
+    this.db.users = this.db.users.filter(u => u.businessId !== businessId);
+
+    if (this.db.activeBusinessId === businessId) {
+      this.db.activeBusinessId = DEFAULT_FACTORY_BUSINESS_ID;
+    }
+
+    this.logActivity('Business Deleted', 'Master Administrator', `Permanently deleted business account "${biz.businessName}".`);
     this.saveToDisk();
   }
 }

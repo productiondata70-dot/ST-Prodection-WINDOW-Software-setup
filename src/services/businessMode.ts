@@ -30,14 +30,23 @@ export interface BusinessModeConfig {
 export function normalizeBusinessMode(businessType?: BusinessType | null): BusinessMode {
   if (!businessType) return 'factory';
   const normalized = String(businessType).trim().toLowerCase();
-  if (normalized === 'shopping_mart' || normalized === 'mart' || normalized === 'supermarket' || normalized === 'retail') {
+  if (
+    normalized === 'shopping_mart' ||
+    normalized === 'mart' ||
+    normalized === 'supermarket' ||
+    normalized === 'retail'
+  ) {
     return 'shopping_mart';
   }
   if (
     normalized === 'small_business' ||
     normalized === 'shop' ||
     normalized === 'general_business' ||
-    normalized === 'service_business'
+    normalized === 'service_business' ||
+    normalized === 'general_trading' ||
+    normalized === 'trading' ||
+    normalized === 'other' ||
+    normalized === 'custom'
   ) {
     return 'small_business';
   }
@@ -85,6 +94,7 @@ export const BUSINESS_MODE_CONFIGS: Record<BusinessMode, BusinessModeConfig> = {
     allowedModules: [
       'dashboard',
       'production',
+      'daily_production',
       'products_catalog',
       'stock',
       'mill_purchases',
@@ -96,7 +106,6 @@ export const BUSINESS_MODE_CONFIGS: Record<BusinessMode, BusinessModeConfig> = {
       'history',
       'pdf_center',
       'settings',
-      'admin',
       'profile',
       'about',
     ],
@@ -115,6 +124,7 @@ export const BUSINESS_MODE_CONFIGS: Record<BusinessMode, BusinessModeConfig> = {
     moduleLabels: {
       dashboard: 'Factory Dashboard',
       production: 'Production Entry',
+      daily_production: 'Daily Production',
       products_catalog: 'Factory Products Catalog',
       stock: 'Stock & Inventory',
       mill_purchases: 'Factory Purchases',
@@ -145,6 +155,7 @@ export const BUSINESS_MODE_CONFIGS: Record<BusinessMode, BusinessModeConfig> = {
     allowedModules: [
       'dashboard',
       'production',
+      'daily_production',
       'products_catalog',
       'stock',
       'mill_purchases',
@@ -156,7 +167,6 @@ export const BUSINESS_MODE_CONFIGS: Record<BusinessMode, BusinessModeConfig> = {
       'history',
       'pdf_center',
       'settings',
-      'admin',
       'profile',
       'about',
     ],
@@ -175,6 +185,7 @@ export const BUSINESS_MODE_CONFIGS: Record<BusinessMode, BusinessModeConfig> = {
     moduleLabels: {
       dashboard: 'Mill Dashboard',
       production: 'Production Entry',
+      daily_production: 'Daily Production',
       products_catalog: 'Mill Products Catalog',
       stock: 'Stock & Inventory',
       mill_purchases: 'Mill Purchases',
@@ -214,7 +225,6 @@ export const BUSINESS_MODE_CONFIGS: Record<BusinessMode, BusinessModeConfig> = {
       'history',
       'pdf_center',
       'settings',
-      'admin',
       'profile',
       'about',
     ],
@@ -299,7 +309,6 @@ export const BUSINESS_MODE_CONFIGS: Record<BusinessMode, BusinessModeConfig> = {
       'history',
       'pdf_center',
       'settings',
-      'admin',
       'profile',
       'about',
     ],
@@ -388,8 +397,16 @@ export function getBusinessModeConfig(businessType?: BusinessType | null): Busin
 
 export function isModuleAllowedForBusinessType(
   module: ModuleKey,
-  businessType?: BusinessType | null
+  businessType?: BusinessType | null,
+  customAllowedModules?: ModuleKey[]
 ): boolean {
+  // Master Admin Panel is strictly isolated and never accessible from regular business workspaces
+  if (module === 'admin') {
+    return false;
+  }
+  if (customAllowedModules && customAllowedModules.length > 0) {
+    return customAllowedModules.includes(module);
+  }
   const config = getBusinessModeConfig(businessType);
   return config.allowedModules.includes(module);
 }

@@ -526,6 +526,7 @@ export interface AppNotification {
 export type ModuleKey =
   | 'dashboard'
   | 'production'
+  | 'daily_production'
   | 'products_catalog'
   | 'stock'
   | 'mill_purchases'
@@ -539,6 +540,8 @@ export type ModuleKey =
   | 'settings'
   | 'admin'
   | 'profile'
+  | 'price_control'
+  | 'cloud_backup'
   | 'about';
 
 export type AppTheme =
@@ -555,6 +558,13 @@ export type AppTheme =
   | 'cobalt-blue'
   | 'flourpro-light';
 export type AppLanguage = 'en' | 'ur' | 'hi';
+
+export interface MasterAdminConfig {
+  username: string;
+  passwordHash: string;
+  securityPinHash: string;
+  updatedAt?: string;
+}
 
 export interface AppSettings {
   isSetupComplete: boolean;
@@ -573,6 +583,9 @@ export interface AppSettings {
   offlineSyncQueue?: any[];
   lastOfflineSyncAt?: string;
   adminPin?: string;
+  masterAdmin?: MasterAdminConfig;
+  businessModeEnabled?: boolean;
+  multipleWorkspacesEnabled?: boolean;
   profileEditPasswordHash?: string;
   profileEditPinHash?: string;
   profileEditFailedAttempts?: number;
