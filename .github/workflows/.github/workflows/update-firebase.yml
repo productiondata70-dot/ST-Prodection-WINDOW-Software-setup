@@ -1,0 +1,22 @@
+name: Update Firebase
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  update-database:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Update Firebase Realtime Database
+      env:
+        FIREBASE_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+      run: |
+        echo "$FIREBASE_SA_KEY" > sa_key.json
+        npm install -g firebase-tools
+        export GOOGLE_APPLICATION_CREDENTIALS=$PWD/sa_key.json
+        firebase database:update --project window-softwear-crm / -d '{"latest_version": "v2.0.0"}' --confirm
